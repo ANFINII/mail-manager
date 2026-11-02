@@ -782,3 +782,19 @@ code {
   align-items: center;
   gap: 4px;
 }
+
+.rule-preview {
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+  font-size: 12px;
+}
+.rule-preview ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+}
+.rule-form label.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}

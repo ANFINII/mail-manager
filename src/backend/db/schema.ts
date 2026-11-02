@@ -111,9 +111,22 @@ export interface ForwardRulesTable {
   keyword: string;
   /** 照合対象: subject / from / body / any */
   match_field: string;
+  /** アクションの引数（転送先アドレス / 移動先フォルダ / Webhook URL） */
   to_address: string;
   enabled: number;
   created_at: string;
+  /** forward / mark_read / flag / move / delete / webhook */
+  action: Generated<string>;
+  /** 適用範囲のグループ。null = 全アカウント */
+  group_id: string | null;
+  /** 1 = ルール作成前に受信したメールにも適用する */
+  apply_existing: Generated<number>;
+}
+
+export interface RuleHitsTable {
+  rule_id: string;
+  message_id: string;
+  applied_at: string;
 }
 
 export interface ForwardTargetsTable {
@@ -173,6 +186,7 @@ export interface Database {
   forward_log: ForwardLogTable;
   forward_targets: ForwardTargetsTable;
   forward_rules: ForwardRulesTable;
+  rule_hits: RuleHitsTable;
   messages_fts: MessagesFtsTable;
 }
 

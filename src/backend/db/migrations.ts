@@ -435,6 +435,42 @@ migrations['0015_mailbox_modseq'] = {
   },
 }
 
+migrations['0016_rule_actions'] = {
+  async up(db: Kysely<unknown>) {
+    // ルールのアクション種別（forward / mark_read / flag / move / delete / webhook）。
+    // to_address はアクションの引数（転送先・移動先フォルダ・Webhook URL）として使う。
+    await db.schema
+      .alterTable('forward_rules')
+      .addColumn('action', 'text', (c) => c.notNull().defaultTo('forward'))
+      .execute()
+    // 適用範囲のグループ（null = 全アカウント）
+    await db.schema.alterTable('forward_rules').addColumn('group_id', 'text').execute()
+    // 1 = ルール作成前に受信したメールにも適用する。既存の転送ルールは従来どおり全件が対象
+    await db.schema
+      .alterTable('forward_rules')
+      .addColumn('apply_existing', 'integer', (c) => c.notNull().defaultTo(1))
+      .execute()
+    // 転送以外のアクションを同じメールへ繰り返し適用しないための記録
+    await db.schema
+      .createTable('rule_hits')
+      .addColumn('rule_id', 'text', (c) =>
+        c.notNull().references('forward_rules.id').onDelete('cascade'),
+      )
+      .addColumn('message_id', 'text', (c) =>
+        c.notNull().references('messages.id').onDelete('cascade'),
+      )
+      .addColumn('applied_at', 'text', (c) => c.notNull())
+      .addPrimaryKeyConstraint('pk_rule_hits', ['rule_id', 'message_id'])
+      .execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropTable('rule_hits').execute()
+    await db.schema.alterTable('forward_rules').dropColumn('apply_existing').execute()
+    await db.schema.alterTable('forward_rules').dropColumn('group_id').execute()
+    await db.schema.alterTable('forward_rules').dropColumn('action').execute()
+  },
+}
+
 const provider: MigrationProvider = {
   async getMigrations() {
     return migrations

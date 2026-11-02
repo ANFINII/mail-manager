@@ -201,6 +201,21 @@ export class MessageRepository {
       .execute()
   }
 
+  /** ID と既読・スターの状態だけを返す（ルールの重複適用を避けるため） */
+  async getRefsWithFlags(ids: string[]): Promise<Array<{ id: string; seen: number; flagged: number }>> {
+    const out: Array<{ id: string; seen: number; flagged: number }> = []
+    for (let i = 0; i < ids.length; i += 400) {
+      out.push(
+        ...(await this.db
+          .selectFrom('messages')
+          .select(['id', 'seen', 'flagged'])
+          .where('id', 'in', ids.slice(i, i + 400))
+          .execute()),
+      )
+    }
+    return out
+  }
+
   /** サーバー側のフラグ変更をローカルへ反映する */
   async applyFlagStates(
     updates: Array<{ id: string; seen: number; flagged: number; answered: number }>,
@@ -735,6 +750,7 @@ export class MessageRepository {
           ]),
         )
     }
+    if (query.storedSince) out = out.where('messages.created_at', '>=', query.storedSince)
     if (query.dateFrom) out = out.where('messages.date', '>=', localDayStart(query.dateFrom))
     if (query.dateTo) out = out.where('messages.date', '<', localDayStart(query.dateTo, 1))
     if (query.from) {

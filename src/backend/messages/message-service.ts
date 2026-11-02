@@ -96,9 +96,11 @@ export function toAttachmentInfo(row: AttachmentRow): AttachmentInfo {
 }
 
 interface MailOp {
-  kind: 'flags' | 'delete';
+  kind: 'flags' | 'delete' | 'move';
   seen?: boolean;
   flagged?: boolean;
+  /** move の移動先フォルダ（パス） */
+  destination?: string;
 }
 
 /** 1 アカウントから同時に送る通数（Graph は 1 メールボックスあたり同時 4 リクエストまで、SMTP はプール 3 接続） */
@@ -261,6 +263,13 @@ export class MessageService {
     return this.runOperation(ids, { kind: 'delete' })
   }
 
+  /** サーバー上で別フォルダへ移動する（移動先は次回同期で取り込まれる） */
+  async move(ids: string[], destination: string): Promise<JobInfo> {
+    const dest = destination.trim()
+    if (!dest) throw new Error('移動先フォルダを指定してください')
+    return this.runOperation(ids, { kind: 'move', destination: dest })
+  }
+
   /** 送信済みフォルダの重複した転送控えを数える（削除はしない） */
   async duplicateSentCopies(
     accountIds?: string[],
@@ -361,49 +370,46 @@ export class MessageService {
     return this.runForward(ids, dest, { manual: true })
   }
 
-  /**
-   * 自動転送ルールを適用する。各ルールのキーワードに一致し、まだ転送先へ送っていないメールを転送する。
-   * 直前に失敗したメールはバックオフ（5分 → 10分 → … 最大 24 時間）が明けるまで再試行しない。
-   */
-  async applyRules(): Promise<import('@shared/types').ApplyRulesResult> {
-    const rules = await this.deps.ruleRepo.listEnabled()
-    let forwarded = 0
-    let deferred = 0
-    for (const rule of rules) {
-      const kw = rule.keyword.trim()
-      if (!kw) continue
-      // 自分の転送控え（送信済みの Fwd:）にキーワードが一致して再転送し続けないよう、受信メールだけを対象にする
-      const query: SearchQuery = { page: 1, pageSize: 500, receivedOnly: true }
-      if (rule.match_field === 'subject') query.subject = kw
-      else if (rule.match_field === 'from') query.from = kw
-      else query.text = kw // 'body' / 'any' は全文検索
-      const ids = await this.deps.messageRepo.searchAllIds(query)
-      if (ids.length === 0) continue
-      const retryable = await this.deps.messageRepo.filterRetryable(ids, rule.to_address, this.now())
-      const waiting = ids.length - retryable.length
-      deferred += waiting
-      if (retryable.length === 0) continue
-      try {
-        const res = await this.runForward(retryable, rule.to_address, { manual: false })
-        forwarded += res.queued
-        if (res.queued > 0 || res.skipped > 0)
-          this.log.info('Auto-forward rule applied', {
-            rule: rule.id,
-            keyword: kw,
-            field: rule.match_field,
-            to: rule.to_address,
-            queued: res.queued,
-            skipped: res.skipped,
-            deferred: waiting,
-          })
-      } catch (err) {
-        this.log.warn('Auto-forward rule failed', {
+  /** 1 件の転送ルールを、条件（query）に一致する受信メールへ適用する */
+  async applyForwardRule(
+    rule: { id: string; keyword: string; match_field: string; to_address: string },
+    query: SearchQuery,
+  ): Promise<{ forwarded: number; deferred: number }> {
+    const ids = await this.deps.messageRepo.searchAllIds(query)
+    if (ids.length === 0) return { forwarded: 0, deferred: 0 }
+    const retryable = await this.deps.messageRepo.filterRetryable(ids, rule.to_address, this.now())
+    const waiting = ids.length - retryable.length
+    if (retryable.length === 0) return { forwarded: 0, deferred: waiting }
+    try {
+      const res = await this.runForward(retryable, rule.to_address, { manual: false })
+      if (res.queued > 0 || res.skipped > 0)
+        this.log.info('Auto-forward rule applied', {
           rule: rule.id,
-          error: this.deps.logger.scrubber.scrub(err instanceof Error ? err.message : String(err)),
+          keyword: rule.keyword,
+          field: rule.match_field,
+          to: rule.to_address,
+          queued: res.queued,
+          skipped: res.skipped,
+          deferred: waiting,
         })
-      }
+      return { forwarded: res.queued, deferred: waiting }
+    } catch (err) {
+      this.log.warn('Auto-forward rule failed', {
+        rule: rule.id,
+        error: this.deps.logger.scrubber.scrub(err instanceof Error ? err.message : String(err)),
+      })
+      return { forwarded: 0, deferred: waiting }
     }
-    return { rules: rules.length, forwarded, deferred }
+  }
+
+  /** 転送ルールのドライラン: 指定 ID のうち、実際に転送されるもの（転送済み・バックオフ待ちを除く） */
+  async forwardCandidates(ids: string[], to: string): Promise<string[]> {
+    const dest = this.validateDest(to)
+    const notForwarded = await this.deps.messageRepo.filterNotForwarded(ids, dest)
+    const retryable = await this.deps.messageRepo.filterRetryable(notForwarded, dest, this.now())
+    const rows = await this.deps.messageRepo.getByIds(retryable)
+    const { send } = await this.dropAlreadyForwarded(rows, dest)
+    return send.map((m) => m.id)
   }
 
   private validateDest(to: string): string {
@@ -727,6 +733,16 @@ export class MessageService {
             this.now(),
           )
           this.deps.events.emit({ type: 'messages.changed', ids: list.map((m) => m.id) })
+        } else if (op.kind === 'move') {
+          if (op.destination && op.destination !== mailboxPath) {
+            await session.moveTo(uids, op.destination)
+            await this.deps.messageRepo.deleteByIds(list.map((m) => m.id))
+            this.deps.events.emit({
+              type: 'messages.changed',
+              ids: list.map((m) => m.id),
+              deleted: true,
+            })
+          }
         } else {
           if (trash && trash.path !== mailboxPath) await session.moveTo(uids, trash.path)
           else await session.deleteMessages(uids)
@@ -861,4 +877,23 @@ function escapeHtml(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+/**
+ * ルールの条件を検索条件に変換する。自分の転送控え（送信済みの Fwd:）に一致して再処理し続けないよう、受信メールだけを対象にする。
+ * キーワードが空なら null（全メール一致は危険なので適用しない）。
+ */
+export function ruleQuery(
+  rule: { keyword: string; match_field: string; created_at?: string; apply_existing?: number },
+  accountIds?: string[],
+): SearchQuery | null {
+  const kw = rule.keyword.trim()
+  if (!kw) return null
+  const query: SearchQuery = { page: 1, pageSize: 500, receivedOnly: true }
+  if (rule.match_field === 'subject') query.subject = kw
+  else if (rule.match_field === 'from') query.from = kw
+  else query.text = kw // 'body' / 'any' は全文検索
+  if (accountIds) query.accountIds = accountIds
+  if (rule.apply_existing === 0 && rule.created_at) query.storedSince = rule.created_at
+  return query
 }

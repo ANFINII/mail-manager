@@ -22,6 +22,7 @@ import type {
   ForwardResult,
   ForwardRule,
   ForwardRuleInput,
+  RulePreview,
   SendResult,
   ForwardTarget,
   MessageDetail,
@@ -135,6 +136,10 @@ export interface RpcMethods {
   'forwardRules.setEnabled': { params: { id: string; enabled: boolean }; result: ForwardRule[] };
   'forwardRules.remove': { params: { id: string }; result: ForwardRule[] };
   'forwardRules.apply': { params: Record<string, never>; result: ApplyRulesResult };
+  /** ルール保存前のドライラン（一致件数・今適用した場合の対象件数・サンプル） */
+  'forwardRules.preview': { params: ForwardRuleInput; result: RulePreview };
+  /** サーバー上で別フォルダへ移動する */
+  'messages.move': { params: { ids: string[]; destination: string }; result: JobInfo };
   'accounts.exportCsv': {
     /** accountIds を指定するとその ID のアカウントだけを出力する（省略時は全件） */
     params: { path: string; accountIds?: string[] };

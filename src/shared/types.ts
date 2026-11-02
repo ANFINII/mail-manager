@@ -379,6 +379,8 @@ export interface SearchQuery {
    * 自動転送・全件転送が自分の転送控え（Fwd:）を再転送してループしないために使う。
    */
   receivedOnly?: boolean;
+  /** この日時（ISO）以降にローカルへ取り込んだメールだけ（ルールの「既存メールには適用しない」用） */
+  storedSince?: string;
   /** 並び替えの対象カラム（件名など自由文は対象外）。既定は date */
   sortBy?: 'date' | 'account' | 'from' | 'mailbox';
   /** 並び順。既定は desc */
@@ -466,12 +468,22 @@ export interface SendResult {
 
 export type ForwardRuleField = 'any' | 'subject' | 'from' | 'body';
 
+/** ルールのアクション */
+export type RuleAction = 'forward' | 'mark_read' | 'flag' | 'move' | 'delete' | 'webhook';
+
 export interface ForwardRule {
   id: string;
   keyword: string;
   matchField: ForwardRuleField;
+  /** アクションの引数: 転送先アドレス（forward）/ 移動先フォルダ（move）/ Webhook URL（webhook、空なら設定の URL） */
   to: string;
   enabled: boolean;
+  action: RuleAction;
+  /** 適用範囲のグループ（null = 全アカウント） */
+  groupId: string | null;
+  /** ルール作成前に受信したメールにも適用する */
+  applyExisting: boolean;
+  createdAt: string;
 }
 
 export interface ForwardRuleInput {
@@ -479,11 +491,27 @@ export interface ForwardRuleInput {
   matchField: ForwardRuleField;
   to: string;
   enabled: boolean;
+  /** 省略時は forward */
+  action?: RuleAction;
+  groupId?: string | null;
+  /** 省略時は true（従来どおり既存メールにも適用） */
+  applyExisting?: boolean;
+}
+
+/** ルールを保存する前の試算（ドライラン） */
+export interface RulePreview {
+  /** 条件に一致する受信メールの件数（適用範囲のグループ内） */
+  matched: number;
+  /** 今「今すぐ適用」したら実際にアクションの対象になる件数（転送済み・既存メール除外などを反映） */
+  wouldApply: number;
+  samples: Array<{ id: string; accountEmail: string; from: string | null; subject: string; date: string | null }>;
 }
 
 export interface ApplyRulesResult {
   rules: number;
   forwarded: number;
+  /** 転送以外のアクション（既読・スター・移動・削除・Webhook）を適用した件数 */
+  actioned?: number;
   /** 直前の失敗からの待機時間（バックオフ）中のため、今回は再試行しなかった件数 */
   deferred: number;
 }

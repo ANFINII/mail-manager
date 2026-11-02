@@ -6,7 +6,8 @@ export type WebhookEventName =
   | 'SYNC_STARTED'
   | 'SYNC_COMPLETED'
   | 'SYNC_FAILED'
-  | 'NEW_MESSAGE';
+  | 'NEW_MESSAGE'
+  | 'RULE_MATCHED';
 
 /** 設定された URL にイベントを POST する（失敗してもアプリの処理は止めない） */
 export class WebhookNotifier {
@@ -16,8 +17,9 @@ export class WebhookNotifier {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  send(event: WebhookEventName, data: Record<string, unknown>): void {
-    const url = this.url().trim()
+  /** urlOverride を渡すと設定の URL の代わりにそこへ送る（ルールごとの Webhook） */
+  send(event: WebhookEventName, data: Record<string, unknown>, urlOverride?: string): void {
+    const url = (urlOverride?.trim() || this.url()).trim()
     if (!url) return
     const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data })
     void this.fetchImpl(url, {

@@ -28,6 +28,7 @@ import { SmtpSender } from './mail/smtp-sender'
 import { MessageService } from './messages/message-service'
 import { OAuthService } from './oauth/oauth-service'
 import { ProviderRegistry } from './providers/presets'
+import { RuleEngine } from './rules/rule-engine'
 import { SearchService } from './search/search-service'
 import { CredentialCipher } from './security/credential-cipher'
 import { HealthService } from './stats/health-service'
@@ -78,6 +79,7 @@ export class BackendApp {
     readonly forwardRuleRepo: ForwardRuleRepository,
     readonly health: HealthService,
     readonly idle: IdleManager,
+    readonly rules: RuleEngine,
     private readonly idleSyncBatch: Batcher<string>,
     private readonly scheduler: AutoSyncScheduler,
     private readonly appInfo: AppInfo,
@@ -210,6 +212,14 @@ export class BackendApp {
     syncRef = sync
     // 削除・フラグ変更も同期と同じ同時接続数で走らせる（既定 5 → 設定値 20）
     messages.setConcurrency(settings.get().syncConcurrency)
+    const rules = new RuleEngine({
+      rules: forwardRuleRepo,
+      messages,
+      messageRepo,
+      accounts: accountRepo,
+      webhook,
+      logger,
+    })
     const search = new SearchService(messageRepo)
     const exporter = new ExportService(accountRepo, search, groupRepo, cipher, logger)
     const health = new HealthService(accountRepo, messageRepo, () => settings.get().healthStaleHours)
@@ -289,6 +299,7 @@ export class BackendApp {
       forwardRuleRepo,
       health,
       idle,
+      rules,
       idleSyncBatch,
       scheduler,
       info,
@@ -325,7 +336,7 @@ export class BackendApp {
       }
       // 同期ジョブ完了時に自動転送ルールを適用する
       if (ev.type === 'job.updated' && ev.job.type === 'sync' && ev.job.status === 'completed') {
-        void app.messages.applyRules().catch(() => undefined)
+        void app.rules.apply().catch(() => undefined)
       }
       // 認証テスト完了時、自動同期が ON かつ設定が有効なら認証済みアカウントを自動で受信同期する
       if (
@@ -553,28 +564,19 @@ export class BackendApp {
       await this.forwardTargetRepo.remove(p.id)
       return toForwardTargets(await this.forwardTargetRepo.list())
     },
-    'forwardRules.list': async () => toForwardRules(await this.forwardRuleRepo.list()),
-    'forwardRules.add': async (p) => {
-      await this.forwardRuleRepo.add(
-        {
-          keyword: p.keyword.trim(),
-          matchField: p.matchField,
-          to: p.to.trim(),
-          enabled: p.enabled,
-        },
-        new Date().toISOString(),
-      )
-      return toForwardRules(await this.forwardRuleRepo.list())
-    },
+    'forwardRules.list': () => this.rules.list(),
+    'forwardRules.add': (p) => this.rules.add(p),
+    'forwardRules.preview': (p) => this.rules.preview(p),
     'forwardRules.setEnabled': async (p) => {
       await this.forwardRuleRepo.setEnabled(p.id, p.enabled)
-      return toForwardRules(await this.forwardRuleRepo.list())
+      return this.rules.list()
     },
     'forwardRules.remove': async (p) => {
       await this.forwardRuleRepo.remove(p.id)
-      return toForwardRules(await this.forwardRuleRepo.list())
+      return this.rules.list()
     },
-    'forwardRules.apply': () => this.messages.applyRules(),
+    'forwardRules.apply': () => this.rules.apply(),
+    'messages.move': (p) => this.messages.move(p.ids, p.destination),
     'attachments.download': (p) => this.messages.downloadAttachment(p.id),
     'jobs.list': async () => this.listJobs(),
     'jobs.cancelAll': async () => ({ cancelled: this.cancelAll() }),
@@ -607,24 +609,6 @@ export class BackendApp {
     this.logger.info('Backend stopped')
     this.logger.close()
   }
-}
-
-function toForwardRules(
-  rows: Array<{
-    id: string;
-    keyword: string;
-    match_field: string;
-    to_address: string;
-    enabled: number;
-  }>,
-) {
-  return rows.map((r) => ({
-    id: r.id,
-    keyword: r.keyword,
-    matchField: r.match_field as import('@shared/types').ForwardRuleField,
-    to: r.to_address,
-    enabled: r.enabled === 1,
-  }))
 }
 
 function toForwardTargets(rows: Array<{ id: string; address: string; label: string | null }>) {
