@@ -14,6 +14,7 @@ import { AccountRepository } from './db/account-repository'
 import { createDatabase, dbConfigFromEnv, type Db, type DbConfig } from './db/database'
 import { ForwardRuleRepository } from './db/forward-rule-repository'
 import { ForwardTargetRepository } from './db/forward-target-repository'
+import { HistoryRepository } from './db/history-repository'
 import { MailboxRepository } from './db/mailbox-repository'
 import { MessageRepository } from './db/message-repository'
 import { SettingsRepository } from './db/settings-repository'
@@ -212,6 +213,7 @@ export class BackendApp {
       smtp,
       graph,
       ruleRepo: forwardRuleRepo,
+      history: new HistoryRepository(db),
       onSent: (accountId) => {
         // 送信控えを取り込むため、そのアカウントを同期する
         void syncRef?.syncAccounts([accountId])
@@ -566,6 +568,21 @@ export class BackendApp {
     'sent.deleteDuplicateCopies': (p) => this.messages.deleteDuplicateSentCopies(p.accountIds),
     'messages.send': (p) => this.messages.send(p.accountId, p.to, p.subject, p.text),
     'messages.reply': (p) => this.messages.reply(p),
+    'history.list': async (p) => {
+      const rows = await new HistoryRepository(this.db).list(p?.limit ?? 100)
+      return rows.map((r) => ({
+        id: r.id,
+        kind: r.kind as 'flags' | 'move' | 'delete',
+        source: r.source as 'manual' | 'rule',
+        ruleId: r.rule_id,
+        label: r.label,
+        createdAt: r.created_at,
+        undoneAt: r.undone_at,
+        items: r.items,
+        undoable: r.undoable,
+      }))
+    },
+    'history.undo': (p) => this.messages.undo(p.id),
     'templates.list': () => this.templates.list(),
     'templates.save': (p) => this.templates.save(p, new Date().toISOString()),
     'templates.remove': (p) => this.templates.remove(p.id),

@@ -14,6 +14,7 @@ import type {
 } from '@shared/types'
 import type { AccountRepository } from '../db/account-repository'
 import type { ForwardRuleRepository } from '../db/forward-rule-repository'
+import type { HistoryRepository, MailOpItemRow, OpOrigin } from '../db/history-repository'
 import type { MailboxRepository } from '../db/mailbox-repository'
 import type {
   MessageRef,
@@ -46,6 +47,8 @@ export interface MessageServiceDeps {
   smtp: SmtpSender;
   graph: GraphSender;
   ruleRepo: ForwardRuleRepository;
+  /** 一括操作の履歴（取り消し用）。省略時は記録しない */
+  history?: HistoryRepository;
   /** 送信後に、その控えを取り込むためアカウントを同期するコールバック */
   onSent?: (accountId: string) => void;
   concurrency?: number;
@@ -105,6 +108,8 @@ interface MailOp {
   answered?: boolean;
   /** move の移動先フォルダ（パス） */
   destination?: string;
+  /** 履歴に記録する場合の操作 ID（runOperation が付ける） */
+  historyId?: string;
 }
 
 /** 1 アカウントから同時に送る通数（Graph は 1 メールボックスあたり同時 4 リクエストまで、SMTP はプール 3 接続） */
@@ -259,19 +264,152 @@ export class MessageService {
     }
   }
 
-  async setFlags(ids: string[], patch: { seen?: boolean; flagged?: boolean }): Promise<JobInfo> {
-    return this.runOperation(ids, { kind: 'flags', ...patch })
+  async setFlags(
+    ids: string[],
+    patch: { seen?: boolean; flagged?: boolean },
+    origin?: OpOrigin,
+  ): Promise<JobInfo> {
+    return this.runOperation(ids, { kind: 'flags', ...patch }, origin ?? { source: 'manual' })
   }
 
-  async delete(ids: string[]): Promise<JobInfo> {
-    return this.runOperation(ids, { kind: 'delete' })
+  async delete(ids: string[], origin?: OpOrigin): Promise<JobInfo> {
+    return this.runOperation(ids, { kind: 'delete' }, origin ?? { source: 'manual' })
   }
 
   /** サーバー上で別フォルダへ移動する（移動先は次回同期で取り込まれる） */
-  async move(ids: string[], destination: string): Promise<JobInfo> {
+  async move(ids: string[], destination: string, origin?: OpOrigin): Promise<JobInfo> {
     const dest = destination.trim()
     if (!dest) throw new Error('移動先フォルダを指定してください')
-    return this.runOperation(ids, { kind: 'move', destination: dest })
+    return this.runOperation(
+      ids,
+      { kind: 'move', destination: dest },
+      origin ?? { source: 'manual', label: dest },
+    )
+  }
+
+  /**
+   * 履歴の操作を取り消す。
+   *  - 移動・ゴミ箱への削除: 移動先から元のフォルダへ戻す（UIDPLUS で移動先 UID が分かったものだけ）
+   *  - 既読・スター: 操作前の状態に戻す
+   * 戻したメールは元のフォルダで新しい UID になるので、そのアカウントを同期して取り込み直す。
+   */
+  async undo(opId: string): Promise<import('@shared/types').UndoResult> {
+    const history = this.deps.history
+    if (!history) throw new Error('履歴が有効ではありません')
+    const op = await history.get(opId)
+    if (!op) throw new Error('操作が見つかりません')
+    if (op.undone_at) throw new Error('この操作はすでに取り消しています')
+    const items = await history.items(opId)
+    const byAccount = new Map<string, MailOpItemRow[]>()
+    for (const it of items) byAccount.set(it.account_id, [...(byAccount.get(it.account_id) ?? []), it])
+    let restored = 0
+    let skipped = 0
+    let failed = 0
+    const moved = new Set<string>()
+    await Promise.all(
+      [...byAccount].map(([accountId, list]) =>
+        this.queue.add(
+          async () => {
+            const r = await this.undoForAccount(accountId, list)
+            restored += r.restored
+            skipped += r.skipped
+            failed += r.failed
+            if (r.moved) moved.add(accountId)
+          },
+          { priority: PRIORITY_MANUAL },
+        ),
+      ),
+    )
+    await history.markUndone(opId, this.now())
+    this.log.info('Mail operation undone', { opId, kind: op.kind, restored, skipped, failed })
+    for (const id of moved) this.deps.onSent?.(id) // 戻したメールを取り込み直す
+    return { restored, skipped, failed }
+  }
+
+  private async undoForAccount(
+    accountId: string,
+    items: MailOpItemRow[],
+  ): Promise<{ restored: number; skipped: number; failed: number; moved: boolean }> {
+    const account = await this.deps.accountRepo.getById(accountId)
+    if (!account) return { restored: 0, skipped: 0, failed: items.length, moved: false }
+    let restored = 0
+    let skipped = 0
+    let failed = 0
+    let moved = false
+    let session: MailSession | null = null
+    try {
+      session = await this.deps.provider.openSession(await buildSessionParams(account, this.deps.auth))
+      // 1) 移動・削除の取り消し: (移動先, 移動元) ごとにまとめて戻す
+      const moves = new Map<string, MailOpItemRow[]>()
+      for (const it of items) {
+        if (it.dest_path && it.dest_uid !== null) {
+          const key = `${it.dest_path}\u0000${it.src_path}`
+          moves.set(key, [...(moves.get(key) ?? []), it])
+        } else if (it.prev_seen === null && it.prev_flagged === null) skipped++
+      }
+      for (const list of moves.values()) {
+        try {
+          await session.openMailbox(list[0].dest_path!, false)
+          await session.moveTo(
+            list.map((i) => i.dest_uid!),
+            list[0].src_path,
+          )
+          restored += list.length
+          moved = true
+        } catch (err) {
+          failed += list.length
+          this.log.warn(`Undo move failed for ${account.email}`, {
+            accountId,
+            error: this.deps.logger.scrubber.scrub(err instanceof Error ? err.message : String(err)),
+          })
+        }
+      }
+      // 2) 既読・スターの取り消し: 元の状態ごとにまとめて付け外しする
+      const flagItems = items.filter((i) => i.prev_seen !== null || i.prev_flagged !== null)
+      const byPath = new Map<string, MailOpItemRow[]>()
+      for (const it of flagItems) byPath.set(it.src_path, [...(byPath.get(it.src_path) ?? []), it])
+      for (const [path, list] of byPath) {
+        try {
+          await session.openMailbox(path, false)
+          const pick = (pred: (i: MailOpItemRow) => boolean) => list.filter(pred).map((i) => i.src_uid)
+          await session.addFlags(pick((i) => i.prev_seen === 1), ['\\Seen'])
+          await session.removeFlags(pick((i) => i.prev_seen === 0), ['\\Seen'])
+          await session.addFlags(pick((i) => i.prev_flagged === 1), ['\\Flagged'])
+          await session.removeFlags(pick((i) => i.prev_flagged === 0), ['\\Flagged'])
+          for (const it of list) {
+            if (!it.message_id) continue
+            await this.deps.messageRepo.updateFlags(
+              [it.message_id],
+              {
+                ...(it.prev_seen !== null ? { seen: it.prev_seen === 1 } : {}),
+                ...(it.prev_flagged !== null ? { flagged: it.prev_flagged === 1 } : {}),
+              },
+              this.now(),
+            )
+          }
+          this.deps.events.emit({
+            type: 'messages.changed',
+            ids: list.map((i) => i.message_id).filter((x): x is string => !!x),
+          })
+          restored += list.length
+        } catch (err) {
+          failed += list.length
+          this.log.warn(`Undo flags failed for ${account.email}`, {
+            accountId,
+            error: this.deps.logger.scrubber.scrub(err instanceof Error ? err.message : String(err)),
+          })
+        }
+      }
+    } catch (err) {
+      failed += items.length - restored - skipped - failed
+      this.log.warn(`Undo failed for ${account.email}`, {
+        accountId,
+        error: this.deps.logger.scrubber.scrub(err instanceof Error ? err.message : String(err)),
+      })
+    } finally {
+      if (session) await session.close().catch(() => undefined)
+    }
+    return { restored, skipped, failed, moved }
   }
 
   /** 送信済みフォルダの重複した転送控えを数える（削除はしない） */
@@ -755,9 +893,14 @@ export class MessageService {
     this.deps.smtp.dispose()
   }
 
-  private async runOperation(ids: string[], op: MailOp): Promise<JobInfo> {
+  private async runOperation(ids: string[], op: MailOp, origin?: OpOrigin): Promise<JobInfo> {
     // 本文は不要なので軽い参照だけ読む（数万件の削除でもメモリを使わない）
     const rows = await this.deps.messageRepo.getRefsByIds([...new Set(ids)])
+    // 取り消せる操作（削除・移動・既読・スター）は履歴に記録する。返信済みの印などは記録しない
+    const recordable =
+      op.kind !== 'flags' || op.seen !== undefined || op.flagged !== undefined
+    if (origin && recordable && rows.length > 0 && this.deps.history)
+      op = { ...op, historyId: await this.deps.history.create(op.kind, origin, this.now()) }
     const byAccount = new Map<string, MessageRef[]>()
     for (const r of rows) {
       const list = byAccount.get(r.account_id) ?? []
@@ -808,6 +951,23 @@ export class MessageService {
       for (const [mailboxPath, list] of byMailbox) {
         await session.openMailbox(mailboxPath, false)
         const uids = list.map((m) => m.remote_uid)
+        const record = async (uidMap: Map<number, number> | null, dest: string | null) => {
+          if (!op.historyId || !this.deps.history) return
+          await this.deps.history.addItems(
+            list.map((m) => ({
+              op_id: op.historyId!,
+              account_id: accountId,
+              message_id: op.kind === 'flags' ? m.id : null,
+              subject: m.subject,
+              src_path: mailboxPath,
+              src_uid: m.remote_uid,
+              dest_path: dest,
+              dest_uid: dest ? (uidMap?.get(m.remote_uid) ?? null) : null,
+              prev_seen: op.kind === 'flags' && op.seen !== undefined ? m.seen : null,
+              prev_flagged: op.kind === 'flags' && op.flagged !== undefined ? m.flagged : null,
+            })),
+          )
+        }
         if (op.kind === 'flags') {
           if (op.seen === true) await session.addFlags(uids, ['\\Seen'])
           if (op.seen === false) await session.removeFlags(uids, ['\\Seen'])
@@ -819,10 +979,11 @@ export class MessageService {
             { seen: op.seen, flagged: op.flagged, answered: op.answered },
             this.now(),
           )
+          await record(null, null)
           this.deps.events.emit({ type: 'messages.changed', ids: list.map((m) => m.id) })
         } else if (op.kind === 'move') {
           if (op.destination && op.destination !== mailboxPath) {
-            await session.moveTo(uids, op.destination)
+            await record(await session.moveTo(uids, op.destination), op.destination)
             await this.deps.messageRepo.deleteByIds(list.map((m) => m.id))
             this.deps.events.emit({
               type: 'messages.changed',
@@ -831,8 +992,13 @@ export class MessageService {
             })
           }
         } else {
-          if (trash && trash.path !== mailboxPath) await session.moveTo(uids, trash.path)
-          else await session.deleteMessages(uids)
+          if (trash && trash.path !== mailboxPath)
+            await record(await session.moveTo(uids, trash.path), trash.path)
+          else {
+            // ゴミ箱が無い・ゴミ箱内の削除は完全削除になり、取り消せない
+            await session.deleteMessages(uids)
+            await record(null, null)
+          }
           await this.deps.messageRepo.deleteByIds(list.map((m) => m.id))
           this.deps.events.emit({
             type: 'messages.changed',

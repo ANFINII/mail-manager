@@ -547,6 +547,43 @@ migrations['0019_mail_templates'] = {
   },
 }
 
+migrations['0020_mail_op_history'] = {
+  async up(db: Kysely<unknown>) {
+    // 一括操作（削除・移動・既読・スター）の履歴。取り消し（元に戻す）に使う
+    await db.schema
+      .createTable('mail_ops')
+      .addColumn('id', 'text', (c) => c.primaryKey())
+      .addColumn('kind', 'text', (c) => c.notNull())
+      .addColumn('source', 'text', (c) => c.notNull())
+      .addColumn('rule_id', 'text')
+      .addColumn('label', 'text')
+      .addColumn('created_at', 'text', (c) => c.notNull())
+      .addColumn('undone_at', 'text')
+      .execute()
+    await db.schema.createIndex('idx_mail_ops_created').on('mail_ops').column('created_at').execute()
+    await db.schema
+      .createTable('mail_op_items')
+      .addColumn('op_id', 'text', (c) => c.notNull().references('mail_ops.id').onDelete('cascade'))
+      .addColumn('account_id', 'text', (c) => c.notNull())
+      /** 操作したメールのローカル ID（フラグ操作の取り消しで DB も戻す）。削除・移動では行は残らない */
+      .addColumn('message_id', 'text')
+      .addColumn('subject', 'text', (c) => c.notNull().defaultTo(''))
+      .addColumn('src_path', 'text', (c) => c.notNull())
+      .addColumn('src_uid', 'integer', (c) => c.notNull())
+      /** 移動・ゴミ箱への削除: 移動先フォルダと UID（UIDPLUS が無いと null で取り消せない） */
+      .addColumn('dest_path', 'text')
+      .addColumn('dest_uid', 'integer')
+      .addColumn('prev_seen', 'integer')
+      .addColumn('prev_flagged', 'integer')
+      .execute()
+    await db.schema.createIndex('idx_mail_op_items_op').on('mail_op_items').column('op_id').execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropTable('mail_op_items').execute()
+    await db.schema.dropTable('mail_ops').execute()
+  },
+}
+
 const provider: MigrationProvider = {
   async getMigrations() {
     return migrations

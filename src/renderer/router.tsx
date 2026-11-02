@@ -6,6 +6,7 @@ import CodesTemplate from 'components/templates/codes'
 import DashboardTemplate from 'components/templates/dashboard'
 import ForwardLogTemplate from 'components/templates/forward-log'
 import HealthTemplate from 'components/templates/health'
+import HistoryTemplate from 'components/templates/history'
 import ImportTemplate from 'components/templates/import'
 import DynamicRulesTemplate from 'components/templates/rules'
 import SearchTemplate from 'components/templates/search'
@@ -25,6 +26,7 @@ const rulesRoute = createRoute({ getParentRoute: () => rootRoute, path: 'rules',
 const healthRoute = createRoute({ getParentRoute: () => rootRoute, path: 'health', component: HealthTemplate })
 const forwardLogRoute = createRoute({ getParentRoute: () => rootRoute, path: 'forward-log', component: ForwardLogTemplate })
 const codesRoute = createRoute({ getParentRoute: () => rootRoute, path: 'codes', component: CodesTemplate })
+const historyRoute = createRoute({ getParentRoute: () => rootRoute, path: 'history', component: HistoryTemplate })
 const importRoute = createRoute({ getParentRoute: () => rootRoute, path: 'import', component: ImportTemplate })
 const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: 'settings', component: SettingsTemplate })
 
@@ -36,6 +38,7 @@ const routeTree = rootRoute.addChildren([
   sentRoute,
   rulesRoute,
   codesRoute,
+  historyRoute,
   healthRoute,
   forwardLogRoute,
   importRoute,

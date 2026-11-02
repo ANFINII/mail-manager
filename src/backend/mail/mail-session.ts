@@ -63,7 +63,8 @@ export interface MailSession {
   downloadPart(uid: number, part: string, maxBytes?: number): Promise<DownloadedPart>;
   addFlags(uids: number[], flags: string[]): Promise<void>;
   removeFlags(uids: number[], flags: string[]): Promise<void>;
-  moveTo(uids: number[], destination: string): Promise<void>;
+  /** 別フォルダへ移動する。UIDPLUS 対応なら 移動元 UID → 移動先 UID の対応を返す（取り消しに使う） */
+  moveTo(uids: number[], destination: string): Promise<Map<number, number> | null>;
   deleteMessages(uids: number[]): Promise<void>;
   /** Sent などのフォルダに raw メッセージを保存する。UID を返す（UIDPLUS 対応時） */
   append(path: string, raw: Buffer, flags: string[]): Promise<number | null>;

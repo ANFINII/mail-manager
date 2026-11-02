@@ -138,6 +138,32 @@ export interface MailTemplatesTable {
   updated_at: string;
 }
 
+export interface MailOpsTable {
+  id: string;
+  /** flags / move / delete */
+  kind: string;
+  /** manual / rule */
+  source: string;
+  rule_id: string | null;
+  /** 表示用の説明（例: ルールのキーワード、移動先） */
+  label: string | null;
+  created_at: string;
+  undone_at: string | null;
+}
+
+export interface MailOpItemsTable {
+  op_id: string;
+  account_id: string;
+  message_id: string | null;
+  subject: string;
+  src_path: string;
+  src_uid: number;
+  dest_path: string | null;
+  dest_uid: number | null;
+  prev_seen: number | null;
+  prev_flagged: number | null;
+}
+
 export interface RuleHitsTable {
   rule_id: string;
   message_id: string;
@@ -203,6 +229,8 @@ export interface Database {
   forward_rules: ForwardRulesTable;
   rule_hits: RuleHitsTable;
   mail_templates: MailTemplatesTable;
+  mail_ops: MailOpsTable;
+  mail_op_items: MailOpItemsTable;
   messages_fts: MessagesFtsTable;
 }
 

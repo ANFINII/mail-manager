@@ -657,3 +657,26 @@ export interface MailTemplateInput {
   subject?: string;
   body?: string;
 }
+
+/** 一括操作の履歴（取り消し用） */
+export interface MailOpSummary {
+  id: string;
+  kind: 'flags' | 'move' | 'delete';
+  source: 'manual' | 'rule';
+  ruleId: string | null;
+  /** 説明（ルールのキーワード・移動先など） */
+  label: string | null;
+  createdAt: string;
+  undoneAt: string | null;
+  /** 対象メール数 */
+  items: number;
+  /** 取り消せるメール数（完全削除・UIDPLUS 非対応の移動は取り消せない） */
+  undoable: number;
+}
+
+export interface UndoResult {
+  restored: number;
+  /** 取り消せなかった（完全削除など）件数 */
+  skipped: number;
+  failed: number;
+}

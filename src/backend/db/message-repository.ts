@@ -30,6 +30,9 @@ export interface MessageRef {
   mailbox_id: string;
   remote_uid: number;
   mailbox_path: string;
+  subject: string;
+  seen: number;
+  flagged: number;
 }
 
 export interface FlagPatch {
@@ -504,6 +507,9 @@ export class MessageRepository {
           'messages.mailbox_id',
           'messages.remote_uid',
           'mailboxes.path as mailbox_path',
+          'messages.subject',
+          'messages.seen',
+          'messages.flagged',
         ])
         .where('messages.id', 'in', ids.slice(i, i + 400))
         .execute()

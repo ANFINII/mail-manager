@@ -187,18 +187,20 @@ export class RuleEngine {
     if (fresh.length === 0) return 0
     const targets =
       action === 'mark_read' || action === 'flag' ? await this.filterByFlag(fresh, action) : fresh
+    // 履歴に「どのルールの操作か」を残し、ルール単位で取り消せるようにする
+    const origin = { source: 'rule' as const, ruleId: rule.id, label: rule.keyword }
     switch (action) {
       case 'mark_read':
-        if (targets.length) await this.deps.messages.setFlags(targets, { seen: true })
+        if (targets.length) await this.deps.messages.setFlags(targets, { seen: true }, origin)
         break
       case 'flag':
-        if (targets.length) await this.deps.messages.setFlags(targets, { flagged: true })
+        if (targets.length) await this.deps.messages.setFlags(targets, { flagged: true }, origin)
         break
       case 'delete':
-        await this.deps.messages.delete(targets)
+        await this.deps.messages.delete(targets, origin)
         break
       case 'move':
-        await this.deps.messages.move(targets, rule.to_address)
+        await this.deps.messages.move(targets, rule.to_address, { ...origin, label: `${rule.keyword} → ${rule.to_address}` })
         break
       case 'webhook': {
         const rows = await this.deps.messageRepo.getByIds(targets)

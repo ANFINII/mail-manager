@@ -215,11 +215,12 @@ class ImapFlowSession implements MailSession {
     await this.client.messageFlagsRemove(uids, flags, { uid: true })
   }
 
-  async moveTo(uids: number[], destination: string): Promise<void> {
+  async moveTo(uids: number[], destination: string): Promise<Map<number, number> | null> {
     this.check()
-    if (uids.length === 0) return
+    if (uids.length === 0) return new Map()
     const r = await this.client.messageMove(uids, destination, { uid: true })
     if (!r) throw new Error(`MOVE to ${destination} failed`)
+    return r.uidMap ?? null
   }
 
   async deleteMessages(uids: number[]): Promise<void> {

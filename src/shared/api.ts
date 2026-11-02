@@ -7,6 +7,8 @@ import type {
   IdleStatus,
   CodeListQuery,
   MailTemplate,
+  MailOpSummary,
+  UndoResult,
   MailTemplateInput,
   ReceivedCode,
   OAuthLoginStart,
@@ -127,6 +129,10 @@ export interface RpcMethods {
     params: { id: string; text: string; replyAll?: boolean; quote?: boolean; quoteHeader?: string };
     result: SendResult;
   };
+  /** 一括操作（削除・移動・既読・スター）の履歴（新しい順、30 日分） */
+  'history.list': { params: { limit?: number }; result: MailOpSummary[] };
+  /** 履歴の操作を取り消す */
+  'history.undo': { params: { id: string }; result: UndoResult };
   'templates.list': { params: Record<string, never>; result: MailTemplate[] };
   'templates.save': { params: MailTemplateInput; result: MailTemplate[] };
   'templates.remove': { params: { id: string }; result: MailTemplate[] };

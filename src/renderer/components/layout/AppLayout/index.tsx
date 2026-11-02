@@ -47,6 +47,9 @@ export default function AppLayout(): React.JSX.Element {
         <Link to="/forward-log" activeProps={{ className: 'active' }}>
           {t('nav.forwardLog')}
         </Link>
+        <Link to="/history" activeProps={{ className: 'active' }}>
+          {t('nav.history')}
+        </Link>
         <Link to="/health" activeProps={{ className: 'active' }}>
           {t('nav.health')}
           {needsAttention > 0 && (
