@@ -8,6 +8,7 @@ import { formatDateTime } from 'utils/format'
 import AuthBadge from 'components/parts/AuthBadge'
 import StatusBadge from 'components/parts/StatusBadge'
 import CredentialsEditor from 'components/widgets/CredentialsEditor'
+import OAuthLogin from 'components/widgets/OAuthLogin'
 
 export default function AccountDetailTemplate() {
   const { t, i18n } = useTranslation()
@@ -19,6 +20,7 @@ export default function AccountDetailTemplate() {
   const [detail, setDetail] = useState<AccountDetail | null | undefined>(undefined)
   const [mailboxes, setMailboxes] = useState<MailboxSummary[]>([])
   const [editingCredentials, setEditingCredentials] = useState(false)
+  const [reauth, setReauth] = useState(false)
   const [detailTick, setDetailTick] = useState(0)
   const mailboxesTick = useAppStore((s) => s.mailboxesTick)
   const locale = i18n.language === 'en' ? 'en-US' : 'ja-JP'
@@ -173,6 +175,11 @@ export default function AccountDetailTemplate() {
         >
           {t('credentials.edit')}
         </button>
+        {(a.provider === 'outlook' || a.provider === 'gmail') && (
+          <button className="btn" onClick={() => setReauth(true)} data-testid="btn-oauth-reauth">
+            {t('oauthLogin.reauth')}
+          </button>
+        )}
         <button
           className="btn"
           onClick={() =>
@@ -200,6 +207,15 @@ export default function AccountDetailTemplate() {
           {t('common.delete')}
         </button>
       </div>
+      {reauth && detail && (
+        <OAuthLogin
+          account={detail}
+          onClose={(id) => {
+            setReauth(false)
+            if (id) setDetailTick((n) => n + 1)
+          }}
+        />
+      )}
       {editingCredentials && (
         <CredentialsEditor
           account={detail}

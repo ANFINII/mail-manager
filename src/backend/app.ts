@@ -26,6 +26,7 @@ import { ImapFlowProvider } from './mail/imapflow-provider'
 import type { SessionAuthDeps } from './mail/session-auth'
 import { SmtpSender } from './mail/smtp-sender'
 import { MessageService } from './messages/message-service'
+import { OAuthLoginService } from './oauth/oauth-login'
 import { OAuthService } from './oauth/oauth-service'
 import { ProviderRegistry } from './providers/presets'
 import { RuleEngine } from './rules/rule-engine'
@@ -82,6 +83,7 @@ export class BackendApp {
     readonly idle: IdleManager,
     readonly rules: RuleEngine,
     readonly storage: StorageService,
+    readonly oauthLogin: OAuthLoginService,
     private readonly idleSyncBatch: Batcher<string>,
     private readonly scheduler: AutoSyncScheduler,
     private readonly appInfo: AppInfo,
@@ -233,6 +235,51 @@ export class BackendApp {
     })
     // テストでは自動整理を走らせない（MM_STORAGE_SCHEDULE=0）
     if (env.MM_STORAGE_SCHEDULE !== '0') storage.startSchedule()
+    const oauthLogin = new OAuthLoginService({
+      registry,
+      logger,
+      timeoutMs: () => settings.get().connectTimeoutMs,
+      fetchImpl: opts.fetchImpl,
+      onAuthorized: async (r, req) => {
+        const emailToId = await accountRepo.emailIdMap()
+        let id = req.accountId ?? emailToId.get(r.email) ?? null
+        if (req.accountId) {
+          const row = await accountRepo.getById(req.accountId)
+          if (!row) throw new Error('アカウントが見つかりません')
+          if (row.email.toLowerCase() !== r.email)
+            throw new Error(`このアカウント（${row.email}）とサインインしたアカウント（${r.email}）が違います`)
+        }
+        if (id) {
+          await accounts.updateCredentials(id, {
+            authType: 'oauth2',
+            clientId: r.clientId,
+            clientSecret: r.clientSecret,
+            refreshToken: r.refreshToken,
+          })
+        } else {
+          const res = await importer.importRows(
+            [
+              {
+                email: r.email,
+                provider: r.provider,
+                auth_type: 'oauth2',
+                client_id: r.clientId,
+                client_secret: r.clientSecret ?? '',
+                refresh_token: r.refreshToken,
+              },
+            ],
+            { groupId: req.groupId ?? null, source: 'oauth-login' },
+          )
+          importer.discard(res.sessionId)
+          if (res.imported !== 1)
+            throw new Error(res.invalid[0]?.errors.join(', ') || '登録できませんでした')
+          id = (await accountRepo.emailIdMap()).get(r.email) ?? null
+          if (!id) throw new Error('登録したアカウントが見つかりません')
+        }
+        void authTest.testAccounts([id])
+        return id
+      },
+    })
     const search = new SearchService(messageRepo)
     const exporter = new ExportService(accountRepo, search, groupRepo, cipher, logger)
     const health = new HealthService(accountRepo, messageRepo, () => settings.get().healthStaleHours)
@@ -314,6 +361,7 @@ export class BackendApp {
       idle,
       rules,
       storage,
+      oauthLogin,
       idleSyncBatch,
       scheduler,
       info,
@@ -598,6 +646,9 @@ export class BackendApp {
     'settings.get': async () => this.settings.get(),
     'settings.update': (p) => this.settings.update(p),
     'app.info': async () => this.info(),
+    'oauth.start': (p) => this.oauthLogin.start(p),
+    'oauth.status': async (p) => this.oauthLogin.status(p.sessionId),
+    'oauth.cancel': async (p) => this.oauthLogin.cancel(p.sessionId),
     'storage.stats': () => this.storage.stats(),
     'storage.cleanup': (p) => this.storage.cleanup({ dryRun: p?.dryRun }),
     'storage.vacuum': () => this.storage.vacuum(),
@@ -618,6 +669,7 @@ export class BackendApp {
   async shutdown(): Promise<void> {
     this.scheduler.stop()
     this.storage.stopSchedule()
+    this.oauthLogin.dispose()
     await this.idle.stop()
     this.idleSyncBatch.dispose()
     this.authTest.dispose()

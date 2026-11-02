@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'hooks/router'
 import { useAppStore } from 'stores/app-store'
 import type { ImportResult, ImportRowError } from '@shared/types'
 import { api, errorMessage } from 'lib/api'
 import { formatDuration } from 'utils/format'
+import OAuthLogin from 'components/widgets/OAuthLogin'
 
 type Edits = Record<number, Record<string, string>>;
 
@@ -27,6 +29,8 @@ export default function ImportTemplate() {
   const [result, setResult] = useState<ImportResult | null>(null)
   const [edits, setEdits] = useState<Edits>({})
   const [showHelp, setShowHelp] = useState(false)
+  const [oauthOpen, setOauthOpen] = useState(false)
+  const navigate = useNavigate()
 
   const browse = async () => {
     const p = await api.openCsvDialog()
@@ -111,7 +115,21 @@ export default function ImportTemplate() {
 
   return (
     <div className="page" data-testid="import">
-      <h1>{t('import.title')}</h1>
+      <div className="page-head">
+        <h1>{t('import.title')}</h1>
+        <span className="spacer" />
+        <button className="btn" onClick={() => setOauthOpen(true)} data-testid="btn-oauth-login">
+          {t('oauthLogin.open')}
+        </button>
+      </div>
+      {oauthOpen && (
+        <OAuthLogin
+          onClose={(id) => {
+            setOauthOpen(false)
+            if (id) navigate(`/accounts/${id}`)
+          }}
+        />
+      )}
       <div className="form-row">
         <label htmlFor="csv-path">{t('import.path')}</label>
         <input

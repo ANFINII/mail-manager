@@ -2,6 +2,12 @@ import type { Provider, SecureMode } from '@shared/types'
 
 export interface OAuthPreset {
   tokenUrl: string;
+  /** 対話ログイン（認可コード + PKCE）の認可エンドポイント */
+  authorizeUrl: string;
+  /** 対話ログインで要求するスコープ（refresh token とメールアドレスの取得用を含む） */
+  loginScope: string;
+  /** 認可エンドポイントに付ける追加パラメータ */
+  authorizeParams?: Record<string, string>;
   scope: string;
   /** SMTP 送信用のスコープ（IMAP 用とは別に取得する） */
   smtpScope: string;
@@ -41,6 +47,10 @@ const DEFAULTS: Record<Provider, ProviderPreset> = {
     passwordAuthSupported: true,
     oauth: {
       tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+      authorizeUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
+      loginScope:
+        'https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send offline_access openid email',
+      authorizeParams: { prompt: 'select_account' },
       scope: 'https://outlook.office.com/IMAP.AccessAsUser.All offline_access',
       smtpScope: 'https://outlook.office.com/SMTP.Send offline_access',
       graphScope: 'https://graph.microsoft.com/Mail.Send offline_access',
@@ -60,6 +70,10 @@ const DEFAULTS: Record<Provider, ProviderPreset> = {
     passwordAuthSupported: true,
     oauth: {
       tokenUrl: 'https://oauth2.googleapis.com/token',
+      authorizeUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+      loginScope: 'https://mail.google.com/ openid email',
+      // refresh token を確実に受け取るため、毎回同意画面を出してオフラインアクセスを求める
+      authorizeParams: { access_type: 'offline', prompt: 'consent' },
       scope: 'https://mail.google.com/',
       smtpScope: 'https://mail.google.com/',
       clientSecretRequired: true,
@@ -101,6 +115,10 @@ export class ProviderRegistry {
     const gmailUrl = env.MM_OAUTH_TOKEN_URL_GMAIL
     if (outlookUrl && this.presets.outlook.oauth) this.presets.outlook.oauth.tokenUrl = outlookUrl
     if (gmailUrl && this.presets.gmail.oauth) this.presets.gmail.oauth.tokenUrl = gmailUrl
+    const outlookAuth = env.MM_OAUTH_AUTHORIZE_URL_OUTLOOK
+    const gmailAuth = env.MM_OAUTH_AUTHORIZE_URL_GMAIL
+    if (outlookAuth && this.presets.outlook.oauth) this.presets.outlook.oauth.authorizeUrl = outlookAuth
+    if (gmailAuth && this.presets.gmail.oauth) this.presets.gmail.oauth.authorizeUrl = gmailAuth
     const graphUrl = env.MM_GRAPH_SEND_URL_OUTLOOK
     if (graphUrl && this.presets.outlook.oauth) this.presets.outlook.oauth.graphSendUrl = graphUrl
   }

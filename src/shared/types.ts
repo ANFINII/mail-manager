@@ -592,3 +592,24 @@ export interface ForwardFailureListResult {
   page: number;
   pageSize: number;
 }
+
+/** OAuth2 対話ログインの開始パラメータ */
+export interface OAuthLoginStart {
+  provider: 'outlook' | 'gmail';
+  clientId: string;
+  /** Google は必須、Microsoft の公開クライアントは不要 */
+  clientSecret?: string;
+  /** サインインするアカウントのメールアドレス（ヒント。id_token から取れないときに使う） */
+  email?: string;
+  /** 既存アカウントの認証情報を更新する場合（メールアドレスが一致する必要がある） */
+  accountId?: string;
+  /** 新規登録するアカウントのグループ */
+  groupId?: string | null;
+}
+
+export interface OAuthLoginStatus {
+  state: 'pending' | 'done' | 'error';
+  email?: string;
+  accountId?: string;
+  error?: string;
+}

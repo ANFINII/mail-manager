@@ -82,6 +82,26 @@ export class ImportService {
     return this.processRows(session, parsed.rows)
   }
 
+  /** CSV ファイルを介さず、行（列名 → 値）を直接取り込む（OAuth ログインで 1 件追加するときなど） */
+  async importRows(
+    rows: Array<Record<string, string>>,
+    opts: ImportOptions & { source?: string } = {},
+  ): Promise<ImportResult> {
+    const session: ImportSession = {
+      id: randomUUID(),
+      source: opts.source ?? 'manual',
+      createdAt: Date.now(),
+      invalid: new Map(),
+      defaultGroupId: opts.groupId ?? null,
+      updateExisting: opts.updateExisting ?? false,
+    }
+    this.sessions.set(session.id, session)
+    return this.processRows(
+      session,
+      rows.map((values, i) => ({ row: i + 1, values })),
+    )
+  }
+
   async retryRows(sessionId: string, edits: ImportRowEdit[]): Promise<ImportResult> {
     const session = this.sessions.get(sessionId)
     if (!session) throw new Error('Import session not found')

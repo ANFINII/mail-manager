@@ -81,6 +81,18 @@ app.whenReady().then(async () => {
   ipcMain.handle('shell.openPath', async (_event, p: unknown) => {
     if (typeof p === 'string') await shell.openPath(p)
   })
+  // OAuth のサインイン画面を既定のブラウザで開く。任意の URL を開けないよう https に限る
+  ipcMain.handle('shell.openExternal', async (_event, url: unknown) => {
+    if (typeof url !== 'string') return
+    let parsed: URL
+    try {
+      parsed = new URL(url)
+    } catch {
+      return
+    }
+    if (parsed.protocol === 'https:' || (!app.isPackaged && parsed.protocol === 'http:'))
+      await shell.openExternal(parsed.toString())
+  })
   ipcMain.handle(
     'dialog.openFile',
     async (_event, opts: { title?: string; extensions?: string[] }) => {

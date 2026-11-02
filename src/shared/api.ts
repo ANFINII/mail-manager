@@ -5,6 +5,8 @@ import type {
   AccountHealth,
   ForwardFailureListResult,
   IdleStatus,
+  OAuthLoginStart,
+  OAuthLoginStatus,
   StorageCleanupResult,
   StorageStats,
   AccountListQuery,
@@ -147,6 +149,13 @@ export interface RpcMethods {
     params: { path: string; accountIds?: string[] };
     result: { count: number };
   };
+  /** OAuth2 対話ログインを開始する（authorizeUrl をブラウザで開く） */
+  'oauth.start': {
+    params: OAuthLoginStart;
+    result: { sessionId: string; authorizeUrl: string };
+  };
+  'oauth.status': { params: { sessionId: string }; result: OAuthLoginStatus };
+  'oauth.cancel': { params: { sessionId: string }; result: void };
   'storage.stats': { params: Record<string, never>; result: StorageStats };
   /** 保存期間の設定に従ってローカルのメール・添付を整理する（dryRun で件数だけ） */
   'storage.cleanup': { params: { dryRun?: boolean }; result: StorageCleanupResult };
@@ -189,6 +198,8 @@ export interface RendererApi {
   }): Promise<string | null>;
   showItemInFolder(path: string): Promise<void>;
   openPath(path: string): Promise<void>;
+  /** https の URL を既定のブラウザで開く（OAuth ログイン用） */
+  openExternal(url: string): Promise<void>;
 }
 
 declare global {

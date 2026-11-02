@@ -13,6 +13,7 @@ const api: RendererApi = {
   saveFileDialog: (opts) => ipcRenderer.invoke('dialog.saveFile', opts),
   showItemInFolder: (p) => ipcRenderer.invoke('shell.showItemInFolder', p),
   openPath: (p) => ipcRenderer.invoke('shell.openPath', p),
+  openExternal: (url) => ipcRenderer.invoke('shell.openExternal', url),
 }
 
 contextBridge.exposeInMainWorld('api', api)
