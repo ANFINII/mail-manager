@@ -1,3 +1,5 @@
+import type { Generated, Insertable, Selectable } from 'kysely'
+
 /** DB テーブル定義（Kysely 用）。列名は PROJECT_SPEC.md §8 に合わせて snake_case。 */
 
 export interface AccountsTable {
@@ -27,6 +29,8 @@ export interface AccountsTable {
   updated_at: string;
   /** 所属グループ（account_groups.id）。未所属は null。グループ削除時は FK で null に戻る。 */
   group_id: string | null;
+  /** 認証テスト・同期が最終的に失敗した連続回数（成功で 0 に戻る）。健全性モニタで使う */
+  consecutive_failures: Generated<number>;
 }
 
 /** アカウントのグループ（一括操作・絞り込みの単位）。名前は一意。 */
@@ -174,5 +178,5 @@ export type MailboxRow = MailboxesTable;
 export type MessageRow = MessagesTable;
 export type AttachmentRow = AttachmentsTable;
 
-export type AccountRow = AccountsTable;
-export type NewAccountRow = AccountsTable;
+export type AccountRow = Selectable<AccountsTable>;
+export type NewAccountRow = Insertable<AccountsTable>;

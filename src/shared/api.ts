@@ -2,6 +2,8 @@ import type {
   AccountCredentialsUpdate,
   AccountDetail,
   AccountGroupInfo,
+  AccountHealth,
+  ForwardFailureListResult,
   AccountListQuery,
   AccountSummary,
   AppInfo,
@@ -108,6 +110,20 @@ export interface RpcMethods {
   'messages.forward': { params: { ids: string[]; to: string }; result: ForwardResult };
   'messages.forwardAll': { params: { query: SearchQuery; to: string }; result: ForwardResult };
   'forwards.list': { params: ForwardListQuery; result: ForwardListResult };
+  /** 健全性モニタ: 要対応アカウント（includeInfo で未テスト・未同期も含める） */
+  'health.list': { params: { includeInfo?: boolean }; result: AccountHealth[] };
+  /** 転送失敗（自動再試行のバックオフ待ちを含む）の一覧 */
+  'forwardFailures.list': { params: ForwardListQuery; result: ForwardFailureListResult };
+  /** 転送失敗をすぐに再試行する（手動転送と同じくバックオフを無視） */
+  'forwardFailures.retry': {
+    params: { items: Array<{ messageId: string; to: string }> };
+    result: { queued: number; skipped: number };
+  };
+  /** 転送失敗の記録を消す（items 省略で全件）。自動転送ルールは次回から再び対象にする */
+  'forwardFailures.clear': {
+    params: { items?: Array<{ messageId: string; to: string }> };
+    result: { cleared: number };
+  };
   'forwardTargets.list': { params: Record<string, never>; result: ForwardTarget[] };
   'forwardTargets.add': { params: { address: string; label?: string }; result: ForwardTarget[] };
   'forwardTargets.remove': { params: { id: string }; result: ForwardTarget[] };

@@ -80,6 +80,15 @@ export default function DashboardTemplate() {
       </div>
       <div className="tiles">
         <button
+          className={`tile ${(stats?.needsAttention ?? 0) > 0 ? 'tile-err' : 'tile-ok'}`}
+          data-testid="tile-needsAttention"
+          data-value={stats?.needsAttention ?? 0}
+          onClick={() => navigate('/health')}
+        >
+          <div className="tile-label">{t('dashboard.needsAttention')}</div>
+          <div className="tile-value">{stats?.needsAttention ?? 0}</div>
+        </button>
+        <button
           className="tile tile-total"
           data-testid="tile-messages"
           data-value={stats?.messages ?? 0}

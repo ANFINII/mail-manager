@@ -226,6 +226,7 @@ export class AuthTestService {
         },
         this.now(),
       )
+      await this.deps.repo.incrementFailures(accountId)
       const logMeta = {
         accountId,
         kind: classified.kind,

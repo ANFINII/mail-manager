@@ -734,3 +734,51 @@ code {
 .row.group-row:not(.row-head):hover {
   background: var(--row-hover);
 }
+
+/* 健全性モニタ・転送ログ */
+.simple-table.full {
+  width: 100%;
+}
+.simple-table td.nowrap,
+.nowrap {
+  white-space: nowrap;
+}
+.simple-table .cell-error {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.issue-list {
+  margin: 0;
+  padding-left: 16px;
+}
+.sev-critical {
+  background: #fde8e8;
+  color: #b42318;
+}
+.sev-warning {
+  background: #fff4e0;
+  color: #9a5b00;
+}
+.sev-info {
+  background: #eef2f7;
+  color: #475467;
+}
+.nav-count {
+  display: inline-block;
+  margin-left: 6px;
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #d92d20;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+.toolbar label.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

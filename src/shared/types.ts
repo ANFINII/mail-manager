@@ -52,6 +52,8 @@ export interface AccountSummary {
   messageCount: number;
   /** 所属グループ ID（未所属は null）。名前は groups.list / AccountGroupInfo で解決する。 */
   groupId: string | null;
+  /** 認証テスト・同期が最終的に失敗した連続回数（成功で 0 に戻る） */
+  consecutiveFailures: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -122,6 +124,8 @@ export interface DashboardStats {
   syncing: number;
   messages: number;
   lastSyncAt: string | null;
+  /** 健全性モニタで「要対応」（critical / warning）と判定されたアカウント数 */
+  needsAttention: number;
 }
 
 /** CSV 取り込みで秘密情報を除いた行の内容。GUI での再編集に使う。 */
@@ -256,6 +260,8 @@ export interface Settings {
   webhookUrl: string;
   /** 添付ファイルの本体も同期時に保存する */
   storeAttachments: boolean;
+  /** 最終成功からこの時間（時間）を超えた認証済みアカウントを「要対応」にする。0 = 判定しない */
+  healthStaleHours: number;
 }
 
 export interface AppInfo {
@@ -458,4 +464,58 @@ export interface ApplyRulesResult {
   forwarded: number;
   /** 直前の失敗からの待機時間（バックオフ）中のため、今回は再試行しなかった件数 */
   deferred: number;
+}
+
+/** 健全性モニタの判定理由 */
+export type HealthReason =
+  | 'auth_failed'
+  | 'error_status'
+  | 'repeated_failures'
+  | 'stale'
+  | 'never_synced'
+  | 'untested'
+  | 'forward_failures';
+
+export type HealthSeverity = 'critical' | 'warning' | 'info';
+
+export interface HealthIssue {
+  reason: HealthReason;
+  severity: HealthSeverity;
+  /** 補足値（連続失敗回数・経過時間(時間)・転送失敗件数など） */
+  value?: number;
+}
+
+export interface AccountHealth {
+  accountId: string;
+  email: string;
+  groupId: string | null;
+  status: AccountStatus;
+  /** issues の中で最も重い深刻度 */
+  severity: HealthSeverity;
+  issues: HealthIssue[];
+  lastError: string | null;
+  lastSuccessAt: string | null;
+  lastSyncAt: string | null;
+}
+
+/** 転送失敗（自動再試行のバックオフ待ちを含む）の 1 件 */
+export interface ForwardFailureRecord {
+  messageId: string;
+  accountEmail: string;
+  fromName: string | null;
+  fromAddress: string | null;
+  subject: string;
+  date: string | null;
+  to: string;
+  attempts: number;
+  lastError: string | null;
+  lastAttemptAt: string;
+  nextRetryAt: string;
+}
+
+export interface ForwardFailureListResult {
+  items: ForwardFailureRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
 }

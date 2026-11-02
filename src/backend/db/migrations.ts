@@ -411,6 +411,19 @@ migrations['0013_store_attachments_default'] = {
   },
 }
 
+migrations['0014_account_health'] = {
+  async up(db: Kysely<unknown>) {
+    // 健全性モニタ用: 認証テスト・同期が「最終的に」失敗した連続回数（成功で 0 に戻る）
+    await db.schema
+      .alterTable('accounts')
+      .addColumn('consecutive_failures', 'integer', (c) => c.notNull().defaultTo(0))
+      .execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.alterTable('accounts').dropColumn('consecutive_failures').execute()
+  },
+}
+
 const provider: MigrationProvider = {
   async getMigrations() {
     return migrations

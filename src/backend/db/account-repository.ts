@@ -165,7 +165,17 @@ export class AccountRepository {
   async updateStatus(id: string, patch: AccountStatusPatch, now: string): Promise<void> {
     await this.db
       .updateTable('accounts')
-      .set({ ...patch, updated_at: now })
+      // 成功を記録したら連続失敗回数をリセットする
+      .set({ ...patch, ...(patch.last_success_at ? { consecutive_failures: 0 } : {}), updated_at: now })
+      .where('id', '=', id)
+      .execute()
+  }
+
+  /** 認証テスト・同期が（リトライを使い切って）最終的に失敗したときに連続失敗回数を 1 増やす */
+  async incrementFailures(id: string): Promise<void> {
+    await this.db
+      .updateTable('accounts')
+      .set((eb) => ({ consecutive_failures: eb('consecutive_failures', '+', 1) }))
       .where('id', '=', id)
       .execute()
   }

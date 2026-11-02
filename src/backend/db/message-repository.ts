@@ -559,6 +559,98 @@ export class MessageRepository {
     return Number(r.c)
   }
 
+  /** アカウントごとの転送失敗件数（健全性モニタ用） */
+  async forwardFailureCountsByAccount(): Promise<Map<string, number>> {
+    const rows = await this.db
+      .selectFrom('forward_attempts')
+      .innerJoin('messages', 'messages.id', 'forward_attempts.message_id')
+      .select(['messages.account_id as account_id', sql<number>`count(*)`.as('c')])
+      .groupBy('messages.account_id')
+      .execute()
+    return new Map(rows.map((r) => [r.account_id, Number(r.c)]))
+  }
+
+  /** 転送失敗（バックオフ待ちを含む）の一覧。新しい失敗から順に返す */
+  async listForwardFailures(query: import('@shared/types').ForwardListQuery): Promise<{
+    rows: Array<{
+      message_id: string;
+      account_email: string;
+      from_name: string | null;
+      from_address: string | null;
+      subject: string;
+      date: string | null;
+      to_address: string;
+      attempts: number;
+      last_error: string | null;
+      last_attempt_at: string;
+      next_retry_at: string;
+    }>;
+    total: number;
+  }> {
+    const apply = <Q extends { where: (...args: any[]) => Q }>(q: Q): Q => {
+      let out = q
+      if (query.accountIds && query.accountIds.length > 0)
+        out = out.where('messages.account_id', 'in', query.accountIds)
+      if (query.to)
+        out = out.where(
+          'forward_attempts.to_address',
+          'like',
+          `%${escapeLike(query.to.toLowerCase())}%`,
+        )
+      return out
+    }
+    const countRow = await apply(
+      this.db
+        .selectFrom('forward_attempts')
+        .innerJoin('messages', 'messages.id', 'forward_attempts.message_id')
+        .select(sql<number>`count(*)`.as('c')),
+    ).executeTakeFirstOrThrow()
+    const pageSize = Math.min(500, Math.max(1, query.pageSize || 50))
+    const page = Math.max(1, query.page || 1)
+    const rows = await apply(
+      this.db
+        .selectFrom('forward_attempts')
+        .innerJoin('messages', 'messages.id', 'forward_attempts.message_id')
+        .innerJoin('accounts', 'accounts.id', 'messages.account_id')
+        .select([
+          'forward_attempts.message_id as message_id',
+          'forward_attempts.to_address as to_address',
+          'forward_attempts.attempts as attempts',
+          'forward_attempts.last_error as last_error',
+          'forward_attempts.last_attempt_at as last_attempt_at',
+          'forward_attempts.next_retry_at as next_retry_at',
+          'accounts.email as account_email',
+          'messages.from_name as from_name',
+          'messages.from_address as from_address',
+          'messages.subject as subject',
+          'messages.date as date',
+        ]),
+    )
+      .orderBy('forward_attempts.last_attempt_at', 'desc')
+      .limit(pageSize)
+      .offset((page - 1) * pageSize)
+      .execute()
+    return { rows, total: Number(countRow.c) }
+  }
+
+  /** 転送失敗の記録を消す（items 省略時は全件）。消した件数を返す */
+  async clearForwardFailures(items?: Array<{ messageId: string; to: string }>): Promise<number> {
+    if (!items) {
+      const r = await this.db.deleteFrom('forward_attempts').executeTakeFirst()
+      return Number(r.numDeletedRows ?? 0)
+    }
+    let n = 0
+    for (const it of items) {
+      const r = await this.db
+        .deleteFrom('forward_attempts')
+        .where('message_id', '=', it.messageId)
+        .where('to_address', '=', it.to)
+        .executeTakeFirst()
+      n += Number(r.numDeletedRows ?? 0)
+    }
+    return n
+  }
+
   /** 検索条件に一致する全メッセージ ID を返す（転送用、上限あり） */
   async searchAllIds(query: SearchQuery, cap = 100_000): Promise<string[]> {
     const ids: string[] = []

@@ -10,6 +10,7 @@ export default function AppLayout(): React.JSX.Element {
   const loadAll = useAppStore((s) => s.loadAll)
   const applyEvent = useAppStore((s) => s.applyEvent)
   const loaded = useAppStore((s) => s.loaded)
+  const needsAttention = useAppStore((s) => s.stats?.needsAttention ?? 0)
 
   useEffect(() => {
     const off = api.onEvent(applyEvent)
@@ -39,6 +40,17 @@ export default function AppLayout(): React.JSX.Element {
         </Link>
         <Link to="/rules" activeProps={{ className: 'active' }}>
           {t('nav.rules')}
+        </Link>
+        <Link to="/forward-log" activeProps={{ className: 'active' }}>
+          {t('nav.forwardLog')}
+        </Link>
+        <Link to="/health" activeProps={{ className: 'active' }}>
+          {t('nav.health')}
+          {needsAttention > 0 && (
+            <span className="nav-count" data-testid="nav-health-count">
+              {needsAttention}
+            </span>
+          )}
         </Link>
         <Link to="/accounts" activeProps={{ className: 'active' }}>
           {t('nav.accounts')}

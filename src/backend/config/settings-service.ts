@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyNewMail: true,
   webhookUrl: '',
   storeAttachments: true,
+  healthStaleHours: 24,
 }
 
 type Spec =
@@ -40,6 +41,7 @@ const SPECS: Record<keyof Settings, Spec> = {
   notifyNewMail: { kind: 'bool' },
   webhookUrl: { kind: 'string', max: 2048 },
   storeAttachments: { kind: 'bool' },
+  healthStaleHours: { kind: 'int', min: 0, max: 24 * 365 },
 }
 
 const ENV_KEYS: Record<keyof Settings, string> = {
@@ -57,6 +59,7 @@ const ENV_KEYS: Record<keyof Settings, string> = {
   notifyNewMail: 'MM_NOTIFY_NEW_MAIL',
   webhookUrl: 'MM_WEBHOOK_URL',
   storeAttachments: 'MM_STORE_ATTACHMENTS',
+  healthStaleHours: 'MM_HEALTH_STALE_HOURS',
 }
 
 /**

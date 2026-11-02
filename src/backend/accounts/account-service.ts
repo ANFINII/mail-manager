@@ -46,6 +46,7 @@ export function toSummary(row: AccountRow): AccountSummary {
     retryCount: row.retry_count,
     messageCount: row.message_count,
     groupId: row.group_id ?? null,
+    consecutiveFailures: Number(row.consecutive_failures ?? 0),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }

@@ -281,6 +281,7 @@ export class SyncService {
         },
         this.now(),
       )
+      await this.deps.repo.incrementFailures(accountId)
       this.log.error(`Account ${account.email} sync failed`, {
         accountId,
         kind: classified.kind,

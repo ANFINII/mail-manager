@@ -1,4 +1,5 @@
 import type { DashboardStats } from '@shared/types'
+import type { HealthService } from './health-service'
 import type { AccountRepository } from '../db/account-repository'
 import type { MessageRepository } from '../db/message-repository'
 
@@ -7,15 +8,17 @@ export class StatsService {
     private readonly repo: AccountRepository,
     private readonly messages: MessageRepository,
     private readonly activeJobs: () => number,
+    private readonly health?: HealthService,
   ) {}
 
   async get(): Promise<DashboardStats> {
-    const [total, byStatus, lastTestAt, lastSyncAt, messages] = await Promise.all([
+    const [total, byStatus, lastTestAt, lastSyncAt, messages, needsAttention] = await Promise.all([
       this.repo.countAll(),
       this.repo.countByStatus(),
       this.repo.lastTestAt(),
       this.repo.lastSyncAt(),
       this.messages.countAll(),
+      this.health ? this.health.countNeedsAttention() : Promise.resolve(0),
     ])
     return {
       total,
@@ -33,6 +36,7 @@ export class StatsService {
       lastTestAt,
       lastSyncAt,
       activeJobs: this.activeJobs(),
+      needsAttention,
     }
   }
 }

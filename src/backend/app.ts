@@ -30,6 +30,7 @@ import { OAuthService } from './oauth/oauth-service'
 import { ProviderRegistry } from './providers/presets'
 import { SearchService } from './search/search-service'
 import { CredentialCipher } from './security/credential-cipher'
+import { HealthService } from './stats/health-service'
 import { StatsService } from './stats/stats-service'
 import { toMailboxSummary } from './sync/mailbox-summary'
 import { AutoSyncScheduler } from './sync/scheduler'
@@ -74,6 +75,7 @@ export class BackendApp {
     readonly forwardTargetRepo: ForwardTargetRepository,
     readonly groups: AccountGroupService,
     readonly forwardRuleRepo: ForwardRuleRepository,
+    readonly health: HealthService,
     private readonly scheduler: AutoSyncScheduler,
     private readonly appInfo: AppInfo,
   ) {}
@@ -207,10 +209,12 @@ export class BackendApp {
     messages.setConcurrency(settings.get().syncConcurrency)
     const search = new SearchService(messageRepo)
     const exporter = new ExportService(accountRepo, search, groupRepo, cipher, logger)
+    const health = new HealthService(accountRepo, messageRepo, () => settings.get().healthStaleHours)
     const stats = new StatsService(
       accountRepo,
       messageRepo,
       () => authTest.activeJobs() + sync.tracker.activeCount() + messages.tracker.activeCount(),
+      health,
     )
     const scheduler = new AutoSyncScheduler(
       async () => {
@@ -264,6 +268,7 @@ export class BackendApp {
       forwardTargetRepo,
       groups,
       forwardRuleRepo,
+      health,
       scheduler,
       info,
     )
@@ -451,6 +456,46 @@ export class BackendApp {
         page: Math.max(1, p.page || 1),
         pageSize: Math.min(500, Math.max(1, p.pageSize || 50)),
       }
+    },
+    'health.list': (p) => this.health.list({ includeInfo: p?.includeInfo }),
+    'forwardFailures.list': async (p) => {
+      const { rows, total } = await this.messageRepo.listForwardFailures(p)
+      return {
+        items: rows.map((r) => ({
+          messageId: r.message_id,
+          accountEmail: r.account_email,
+          fromName: r.from_name,
+          fromAddress: r.from_address,
+          subject: r.subject,
+          date: r.date,
+          to: r.to_address,
+          attempts: Number(r.attempts),
+          lastError: r.last_error,
+          lastAttemptAt: r.last_attempt_at,
+          nextRetryAt: r.next_retry_at,
+        })),
+        total,
+        page: Math.max(1, p.page || 1),
+        pageSize: Math.min(500, Math.max(1, p.pageSize || 50)),
+      }
+    },
+    'forwardFailures.retry': async (p) => {
+      // 宛先ごとにまとめて手動転送する（手動転送はバックオフを無視して即時に送る）
+      const byTo = new Map<string, string[]>()
+      for (const it of p.items) byTo.set(it.to, [...(byTo.get(it.to) ?? []), it.messageId])
+      let queued = 0
+      let skipped = 0
+      for (const [to, ids] of byTo) {
+        const r = await this.messages.forward(ids, to)
+        queued += r.queued
+        skipped += r.skipped
+      }
+      return { queued, skipped }
+    },
+    'forwardFailures.clear': async (p) => {
+      const cleared = await this.messageRepo.clearForwardFailures(p?.items)
+      void this.pushStats()
+      return { cleared }
     },
     'forwardTargets.list': async () => toForwardTargets(await this.forwardTargetRepo.list()),
     'forwardTargets.add': async (p) => {

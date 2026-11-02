@@ -249,6 +249,16 @@ export default function SettingsTemplate() {
           {t('settings.storeAttachments')}
         </label>
         <label>
+          {t('settings.healthStaleHours')}
+          <input
+            type="number"
+            min={0}
+            max={8760}
+            value={form.healthStaleHours}
+            onChange={num('healthStaleHours')}
+          />
+        </label>
+        <label>
           {t('settings.webhookUrl')}
           <input
             value={form.webhookUrl}
