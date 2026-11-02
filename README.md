@@ -37,6 +37,16 @@ CSV 一括登録・ブラウザでの OAuth サインイン、一括認証テス
 - 転送ログ画面: 転送の成功履歴と、失敗（自動再試行のバックオフ待ち）を一覧。失敗は「今すぐ再試行」「記録を消去」できる
 - OAuth2 の対話ログイン: インポート画面の「ブラウザでサインインして追加」、アカウント詳細の「ブラウザで再サインイン」から、Microsoft / Google のサインイン画面をブラウザで開いて refresh token を取得（RFC 8252: 認可コード + PKCE(S256) + 127.0.0.1 のループバックリダイレクト）。メールアドレスは id_token から取得し、既存アカウントの再サインインで別のメールボックスに入った場合は拒否。アプリ登録ではループバックのリダイレクト URI（http://127.0.0.1、ポート任意）を許可する
 - 保存容量の管理（設定画面）: DB・添付ファイルの使用量を表示。メールの保存期間（古いメールはこの PC のコピーだけを削除、サーバーは残す）と添付ファイル本体の保存期間（必要時に再取得）を設定でき、1 日 1 回自動で整理。孤立した添付フォルダの掃除、DB の最適化（VACUUM）も可能
+- 認証コード画面: 受信メールから認証コード（ワンタイムパスワード）と確認・ログインリンクを自動抽出（日本語・英語のキーワード、件名、単独行の数字。金額・年・配信停止リンクは除外）。クリックでコピー、リンクはブラウザで開く。メール表示にもコードを出し、Webhook ルールの通知にも含める。既存メールは起動後にバックグラウンドで抽出
+- 返信・全員に返信: 受信したアカウントから返信（In-Reply-To / References 付き、引用、全員に返信では自分を除いて Cc）。送信控えを保存し元メールに \\Answered を付ける。テンプレート（定型文、`{{from_name}}` などの差し込み）を設定画面で管理し、返信・新規送信で選べる
+- 操作履歴（元に戻す）: 削除・移動・既読・スターの一括操作（手動・自動ルール）を 30 日記録し、移動先・ゴミ箱から元のフォルダへ戻す／元のフラグに戻す（UIDPLUS で移動先 UID を控える。完全削除は戻せない）
+- 日次レポート: 設定時刻に、直近 24 時間の新着（アカウント別）・認証コード・転送の成否と、要対応アカウント・状態の集計をメール（指定アカウントから）と Webhook（`DAILY_REPORT`）へ送る。プレビュー・今すぐ送信あり
+- タグ・メモ: アカウントに複数のタグと自由記述のメモ。一覧でのタグ絞り込み・一括タグ付け、検索はタグ・メモにも一致
+- 接続状況画面: IMAP の同時接続数・最大値、1 分ごとの接続数とスロットリング（接続数超過・レート制限・421/429 など）、ホスト別の接続・失敗・送信、直近の制限・エラーを表示（直近 60 分、起動中のみ）
+- アプリのロック: 起動時・一定時間の無操作・画面ロック／スリープでロックし、パスコード（scrypt でハッシュ化して保存、試行回数制限あり）か Touch ID で解除。ロック中はメインプロセスが RPC・ダイアログを拒否し、画面へイベントを送らず、通知に件名を出さない
+- 監査ログ: 認証情報つき書き出し・削除・認証情報の変更・ルール／グループ／設定の変更・一括操作・送信・バックアップ・ロック解除などを、成功・失敗とも OS ユーザー名（サーバーモードではトークン名）つきで 1 年記録。パスワード・トークン・本文は記録しない
+- Gmail API / Microsoft Graph での取得: OAuth2 アカウントは取得方法を IMAP / Graph（Outlook）/ Gmail API（Gmail）から選べる。同期・フラグ変更と削除の取り込み・一括操作・取り消し・ルールはそのまま動く（API のメッセージ ID を連番 UID に対応付け）。Graph は Mail.ReadWrite の同意が必要（ブラウザでの再サインインで「Graph API で取得」を選ぶ）。API ではプッシュ受信（IDLE）は使わず定期同期
+- チームで共有（サーバーモード）: `npm run server` でバックエンドを Electron なしで起動し、複数の PC・メンバーから同じアカウント・メール・ルール・履歴を使える（下記「共有サーバー」）
 - Phase 4/5 の一部: 自動同期（起動時は OFF。受信メール／ダッシュボードの「自動同期」ボタンで ON にすると即時受信し、以後は設定間隔と認証完了時に受信）、macOS 通知、Webhook、CSV エクスポート、DB バックアップ/復元
 
 ## セットアップ
@@ -73,6 +83,21 @@ git push --follow-tags
 - 配布版は 1 時間ごとに [update.electronjs.org](https://github.com/electron/update.electronjs.org) 経由で新しいリリースを確認し、ダウンロード後に再起動を促す（macOS / Windows。Linux は手動更新）
 - macOS の署名・公証は、リポジトリの secrets に `MACOS_CERT_P12`（Developer ID Application 証明書の .p12 を base64 化）・`MACOS_CERT_PASSWORD`・`APPLE_SIGN_IDENTITY`・`APPLE_ID`・`APPLE_APP_SPECIFIC_PASSWORD`・`APPLE_TEAM_ID` を設定すると有効になる。未設定なら署名なしでビルドする（Gatekeeper の警告が出る。macOS の自動アップデートは署名済みビルドでのみ動く）
 - 自動アップデートを止めるには `MM_DISABLE_AUTO_UPDATE=1`
+
+## 共有サーバー（チームで使う）
+
+```bash
+MM_SERVER_TOKENS="alice:<16文字以上のトークン>,bob:<16文字以上のトークン>" \
+DATABASE_URL=postgres://user:pass@db/mail_manager \
+MM_SERVER_HOST=0.0.0.0 MM_TLS_CERT=cert.pem MM_TLS_KEY=key.pem \
+npm run server
+```
+
+- 各 PC のアプリで「設定 → 接続先（チームで共有）」にサーバーの URL とトークンを入れ、保存して再起動する。認証情報はサーバー側で暗号化して持ち、PC には保存しない
+- 暗号鍵は `MM_MASTER_KEY`（64 桁の 16 進）か、`MM_DATA_DIR/master.key`（初回起動時に作成、0600）。失うと保存済みの認証情報を復号できないのでバックアップしておく
+- 外部に公開する場合は TLS（`MM_TLS_CERT` / `MM_TLS_KEY`）かリバースプロキシを使う。既定は 127.0.0.1 でだけ待ち受ける
+- CSV の取り込み・書き出し、バックアップ、添付ファイルは、ファイルの中身をアプリとサーバーの間で受け渡す（パスは各 PC 側）
+- 監査ログの「ユーザー」はトークンの名前になる
 
 ## 300 アカウントの動作確認（ダミーアカウント）
 
@@ -120,6 +145,10 @@ u003@example.com,custom,password,<password>,,,,imap.example.com,993,tls,smtp.exa
 | `MM_IDLE_RENEW_MS`, `MM_IDLE_BACKOFF_MS` | IDLE の張り直し間隔・再接続待ち（テスト用） |
 | `MM_STORAGE_SCHEDULE=0` | 保存容量の自動整理を止める（テスト用） |
 | `MM_DISABLE_AUTO_UPDATE=1` | 配布版の自動アップデートを止める |
+| `MM_REPORT_TIME`, `MM_REPORT_TO`, `MM_REPORT_FROM_ACCOUNT_ID`, `MM_REPORT_WEBHOOK` | 日次レポートの設定の上書き |
+| `MM_GRAPH_API_URL`, `MM_GMAIL_API_URL` | Graph / Gmail API の接続先の差し替え（擬似サーバー用） |
+| `MM_SERVER_TOKENS`, `MM_DATA_DIR`, `MM_MASTER_KEY`, `MM_SERVER_HOST`, `MM_SERVER_PORT`, `MM_TLS_CERT`, `MM_TLS_KEY` | 共有サーバー（`npm run server`）の設定 |
+| `MM_CODE_BACKFILL=0`, `MM_REPORT_SCHEDULE=0` | 認証コードのバックフィル・日次レポートの定期実行を止める（テスト用） |
 | `MM_INSECURE_KEY_FILE=1` | 暗号鍵を Keychain ではなくファイルに置く（**テスト専用**） |
 | `MM_LOG_LEVEL` | `debug` / `info` / `warn` / `error` |
 | `MM_OPEN_DEVTOOLS=1` | 起動時に DevTools を開く |
@@ -135,9 +164,10 @@ u003@example.com,custom,password,<password>,,,,imap.example.com,993,tls,smtp.exa
 ## ディレクトリ
 
 ```
-src/main/      Electron main（ウィンドウ、Keychain、backend プロセス管理、IPC）
+src/main/      Electron main（ウィンドウ、Keychain、backend プロセス管理 / 共有サーバーへの接続、アプリのロック、IPC）
 src/preload/   contextBridge
-src/backend/   純 TypeScript のバックエンド（accounts / auth / sync / search / messages / rules / stats / storage / oauth / mail / queue / db / security / logging / export）
+src/backend/   純 TypeScript のバックエンド（accounts / audit / auth / codes / sync / search / messages / metrics / report / rules / stats / storage / oauth / mail（api: Graph・Gmail API） / queue / db / security / logging / export）
+src/server/    共有サーバー（HTTP RPC・SSE・トークン認証、npm run server）
 src/renderer/  React UI（Dashboard / Accounts / AccountDetail / Search + MessageViewer / Sent / Rules / ForwardLog / Health / Import / Settings）
 src/shared/    IPC 契約と共有型
 tests/         unit / integration / e2e、擬似サーバー（tests/helpers。IMAP は CONDSTORE / IDLE、OAuth は認可コードフローにも対応）
@@ -161,6 +191,8 @@ scripts/       ダミー CSV 生成、擬似サーバー起動
 | 3. 横断検索 / Mail Viewer / 添付 / 各種フィルタ | 完了（PostgreSQL は pg_trgm の GIN 索引で部分一致検索） |
 | 4. 自動同期・IMAP IDLE・macOS 通知・Webhook・リアルタイム更新・OAuth2 対話ログイン | 完了 |
 | 5. 一括メール操作・自動ルール・転送ログ・健全性モニタ・CSV エクスポート・バックアップ/復元・保存容量の管理 | 完了 |
+| 6. 認証コード抽出・返信／テンプレート・操作の取り消し・日次レポート・タグ／メモ・接続状況・アプリのロック・監査ログ | 完了 |
+| 7. Gmail API / Microsoft Graph での取得・共有サーバー（チーム利用） | 完了 |
 | 配布 | macOS / Windows / Linux のビルド、GitHub Releases、自動アップデート（署名は secrets 設定時） |
 
-未実装: Gmail API / Microsoft Graph 経由のメール取得（取得は IMAP。Graph は送信のみ）、QRESYNC（削除の検出は UID SEARCH で行う）。
+未実装: QRESYNC（削除の検出は UID SEARCH で行う）、API 取得でのプッシュ受信（Graph の変更通知・Gmail の Pub/Sub。定期同期で受信）、サーバーモードでのユーザーごとの権限（トークンを持つ人は全操作が可能）。
