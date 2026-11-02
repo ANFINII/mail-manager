@@ -3,6 +3,7 @@ import AppLayout from 'components/layout/AppLayout'
 import AccountDetailTemplate from 'components/templates/account-detail'
 import AccountsTemplate from 'components/templates/accounts'
 import CodesTemplate from 'components/templates/codes'
+import ConnectionsTemplate from 'components/templates/connections'
 import DashboardTemplate from 'components/templates/dashboard'
 import ForwardLogTemplate from 'components/templates/forward-log'
 import HealthTemplate from 'components/templates/health'
@@ -27,6 +28,7 @@ const healthRoute = createRoute({ getParentRoute: () => rootRoute, path: 'health
 const forwardLogRoute = createRoute({ getParentRoute: () => rootRoute, path: 'forward-log', component: ForwardLogTemplate })
 const codesRoute = createRoute({ getParentRoute: () => rootRoute, path: 'codes', component: CodesTemplate })
 const historyRoute = createRoute({ getParentRoute: () => rootRoute, path: 'history', component: HistoryTemplate })
+const connectionsRoute = createRoute({ getParentRoute: () => rootRoute, path: 'connections', component: ConnectionsTemplate })
 const importRoute = createRoute({ getParentRoute: () => rootRoute, path: 'import', component: ImportTemplate })
 const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: 'settings', component: SettingsTemplate })
 
@@ -39,6 +41,7 @@ const routeTree = rootRoute.addChildren([
   rulesRoute,
   codesRoute,
   historyRoute,
+  connectionsRoute,
   healthRoute,
   forwardLogRoute,
   importRoute,

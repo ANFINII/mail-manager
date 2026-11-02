@@ -29,6 +29,7 @@ import { ImapFlowProvider } from './mail/imapflow-provider'
 import type { SessionAuthDeps } from './mail/session-auth'
 import { SmtpSender } from './mail/smtp-sender'
 import { MessageService } from './messages/message-service'
+import { MetricsService } from './metrics/metrics-service'
 import { OAuthLoginService } from './oauth/oauth-login'
 import { OAuthService } from './oauth/oauth-service'
 import { ProviderRegistry } from './providers/presets'
@@ -91,6 +92,7 @@ export class BackendApp {
     readonly codes: CodeService,
     readonly templates: TemplateRepository,
     readonly report: ReportService,
+    readonly metrics: MetricsService,
     private readonly idleSyncBatch: Batcher<string>,
     private readonly scheduler: AutoSyncScheduler,
     private readonly appInfo: AppInfo,
@@ -148,7 +150,9 @@ export class BackendApp {
       events,
     })
     const groups = new AccountGroupService({ groups: groupRepo, accounts: accountRepo, events, logger })
-    const provider = opts.provider ?? new ImapFlowProvider()
+    // すべての IMAP 接続（同期・IDLE・一括操作・認証テスト）を計測する
+    const metrics = new MetricsService()
+    const provider = metrics.wrap(opts.provider ?? new ImapFlowProvider())
     const auth: SessionAuthDeps = {
       repo: accountRepo,
       cipher,
@@ -175,6 +179,7 @@ export class BackendApp {
       },
     })
     const sync = new SyncService({
+      metrics,
       repo: accountRepo,
       mailboxRepo,
       messageRepo,
@@ -203,6 +208,30 @@ export class BackendApp {
       timeoutMs: () => settings.get().connectTimeoutMs,
       fetchImpl: opts.fetchImpl,
     })
+    // 送信（SMTP / Graph）の成否とスロットリングを計測する
+    const smtpSend = smtp.send.bind(smtp)
+    smtp.send = async (account, message, signal) => {
+      const host = account.smtp_host || registry.get(account.provider as never).smtpHost || 'smtp'
+      try {
+        const r = await smtpSend(account, message, signal)
+        metrics.sendResult(host, account.email, null)
+        return r
+      } catch (err) {
+        metrics.sendResult(host, account.email, err)
+        throw err
+      }
+    }
+    const graphSend = graph.send.bind(graph)
+    graph.send = async (account, message, signal) => {
+      try {
+        const r = await graphSend(account, message, signal)
+        metrics.sendResult('graph.microsoft.com', account.email, null)
+        return r
+      } catch (err) {
+        metrics.sendResult('graph.microsoft.com', account.email, err)
+        throw err
+      }
+    }
     let syncRef: SyncService | null = null
     const messages = new MessageService({
       accountRepo,
@@ -391,6 +420,7 @@ export class BackendApp {
       codes,
       new TemplateRepository(db),
       report,
+      metrics,
       idleSyncBatch,
       scheduler,
       info,
@@ -606,6 +636,7 @@ export class BackendApp {
       return { report: r, ...this.report.format(r) }
     },
     'report.send': () => this.report.send(),
+    'metrics.get': async () => this.metrics.snapshot(),
     'templates.list': () => this.templates.list(),
     'templates.save': (p) => this.templates.save(p, new Date().toISOString()),
     'templates.remove': (p) => this.templates.remove(p.id),

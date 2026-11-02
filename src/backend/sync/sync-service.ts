@@ -16,6 +16,8 @@ import { JobTracker, type Job } from '../queue/job-tracker'
 import { AbortError, TaskQueue } from '../queue/task-queue'
 
 export interface SyncServiceDeps {
+  /** 接続後のエラー（スロットリングなど）を計測する */
+  metrics?: { failure(host: string, account: string, err: unknown, via: 'imap'): void };
   repo: AccountRepository;
   mailboxRepo: MailboxRepository;
   messageRepo: MessageRepository;
@@ -228,6 +230,8 @@ export class SyncService {
         this.tracker.complete(job, accountId, 'cancelled')
         return
       }
+      // 接続の失敗はプロバイダー側で数えているので、接続後（同期中）のエラーだけ数える
+      if (session) this.deps.metrics?.failure(account.imap_host, account.email, err, 'imap')
       const classified = classifyError(err)
       const message = this.deps.logger.scrubber
         .scrub(classified.message)

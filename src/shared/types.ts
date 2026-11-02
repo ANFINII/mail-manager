@@ -713,3 +713,35 @@ export interface DailyReport {
   needsAttention: Array<{ email: string; severity: HealthSeverity; reasons: HealthReason[] }>;
   needsAttentionTotal: number;
 }
+
+export type MetricsEventKind = 'throttled' | 'imap_error' | 'send_error';
+
+/** 接続数とレート制限の計測（直近 60 分、アプリ起動中のみ） */
+export interface ConnectionMetrics {
+  /** 今開いている IMAP 接続数 */
+  open: number;
+  /** 起動後の最大同時接続数 */
+  peak: number;
+  /** 1 分ごとの集計（古い順、60 本） */
+  series: Array<{
+    at: string;
+    connects: number;
+    failures: number;
+    throttled: number;
+    sends: number;
+    sendFailures: number;
+  }>;
+  /** 接続先ホストごとの集計（起動後の累計。open/peak は IMAP） */
+  hosts: Array<{
+    host: string;
+    open: number;
+    peak: number;
+    connects: number;
+    failures: number;
+    throttled: number;
+    sends: number;
+    sendFailures: number;
+  }>;
+  /** 直近のスロットリング・エラー（新しい順、最大 100 件） */
+  events: Array<{ at: string; kind: MetricsEventKind; host: string; account: string; message: string }>;
+}

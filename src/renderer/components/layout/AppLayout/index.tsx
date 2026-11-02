@@ -64,6 +64,9 @@ export default function AppLayout(): React.JSX.Element {
         <Link to="/import" activeProps={{ className: 'active' }}>
           {t('nav.import')}
         </Link>
+        <Link to="/connections" activeProps={{ className: 'active' }}>
+          {t('nav.connections')}
+        </Link>
         <div className="nav-spacer" />
         <Link to="/settings" activeProps={{ className: 'active' }}>
           {t('nav.settings')}

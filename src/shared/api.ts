@@ -9,6 +9,7 @@ import type {
   MailTemplate,
   MailOpSummary,
   DailyReport,
+  ConnectionMetrics,
   UndoResult,
   MailTemplateInput,
   ReceivedCode,
@@ -145,6 +146,8 @@ export interface RpcMethods {
   'report.preview': { params: Record<string, never>; result: { report: DailyReport; subject: string; text: string } };
   /** 日次レポートを今すぐ送る */
   'report.send': { params: Record<string, never>; result: { email: boolean; webhook: boolean } };
+  /** 接続数・失敗・スロットリングの計測（直近 60 分） */
+  'metrics.get': { params: Record<string, never>; result: ConnectionMetrics };
   'templates.list': { params: Record<string, never>; result: MailTemplate[] };
   'templates.save': { params: MailTemplateInput; result: MailTemplate[] };
   'templates.remove': { params: { id: string }; result: MailTemplate[] };
