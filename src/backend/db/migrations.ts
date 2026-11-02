@@ -1,0 +1,429 @@
+import { sql, type Kysely } from 'kysely'
+import { Migrator, type Migration, type MigrationProvider } from 'kysely/migration'
+
+export type DbDriver = 'sqlite' | 'postgres';
+let currentDriver: DbDriver = 'sqlite'
+export function setMigrationDriver(driver: DbDriver): void {
+  currentDriver = driver
+}
+
+/**
+ * マイグレーションはコード内に持つ（パッケージ後にファイルシステムを走査しないため）。
+ * SQLite / PostgreSQL 両方で通る型だけを使う。
+ */
+const migrations: Record<string, Migration> = {
+  '0001_accounts_settings': {
+    async up(db: Kysely<unknown>) {
+      await db.schema
+        .createTable('accounts')
+        .addColumn('id', 'text', (c) => c.primaryKey())
+        .addColumn('email', 'text', (c) => c.notNull().unique())
+        .addColumn('provider', 'text', (c) => c.notNull())
+        .addColumn('auth_type', 'text', (c) => c.notNull())
+        .addColumn('imap_host', 'text', (c) => c.notNull())
+        .addColumn('imap_port', 'integer', (c) => c.notNull())
+        .addColumn('imap_secure', 'text', (c) => c.notNull())
+        .addColumn('smtp_host', 'text')
+        .addColumn('smtp_port', 'integer')
+        .addColumn('smtp_secure', 'text')
+        .addColumn('proxy', 'text')
+        .addColumn('encrypted_credentials', 'text', (c) => c.notNull())
+        .addColumn('enabled', 'integer', (c) => c.notNull().defaultTo(1))
+        .addColumn('status', 'text', (c) => c.notNull().defaultTo('untested'))
+        .addColumn('auth_status', 'text', (c) => c.notNull().defaultTo('untested'))
+        .addColumn('last_error', 'text')
+        .addColumn('last_error_at', 'text')
+        .addColumn('last_success_at', 'text')
+        .addColumn('last_sync_at', 'text')
+        .addColumn('retry_count', 'integer', (c) => c.notNull().defaultTo(0))
+        .addColumn('message_count', 'integer', (c) => c.notNull().defaultTo(0))
+        .addColumn('created_at', 'text', (c) => c.notNull())
+        .addColumn('updated_at', 'text', (c) => c.notNull())
+        .execute()
+      await db.schema.createIndex('idx_accounts_status').on('accounts').column('status').execute()
+      await db.schema
+        .createIndex('idx_accounts_auth_status')
+        .on('accounts')
+        .column('auth_status')
+        .execute()
+      await db.schema
+        .createTable('settings')
+        .addColumn('key', 'text', (c) => c.primaryKey())
+        .addColumn('value', 'text', (c) => c.notNull())
+        .execute()
+    },
+    async down(db: Kysely<unknown>) {
+      await db.schema.dropTable('settings').execute()
+      await db.schema.dropTable('accounts').execute()
+    },
+  },
+}
+
+migrations['0002_mailboxes_messages'] = {
+  async up(db: Kysely<unknown>) {
+    await db.schema
+      .createTable('mailboxes')
+      .addColumn('id', 'text', (c) => c.primaryKey())
+      .addColumn('account_id', 'text', (c) =>
+        c.notNull().references('accounts.id').onDelete('cascade'),
+      )
+      .addColumn('path', 'text', (c) => c.notNull())
+      .addColumn('name', 'text', (c) => c.notNull())
+      .addColumn('delimiter', 'text')
+      .addColumn('special_use', 'text')
+      .addColumn('uid_validity', 'integer')
+      .addColumn('last_sync_uid', 'integer', (c) => c.notNull().defaultTo(0))
+      .addColumn('total_messages', 'integer', (c) => c.notNull().defaultTo(0))
+      .addColumn('last_sync_at', 'text')
+      .addColumn('sync_enabled', 'integer', (c) => c.notNull().defaultTo(1))
+      .addColumn('created_at', 'text', (c) => c.notNull())
+      .addColumn('updated_at', 'text', (c) => c.notNull())
+      .addUniqueConstraint('uq_mailboxes_account_path', ['account_id', 'path'])
+      .execute()
+
+    await db.schema
+      .createTable('messages')
+      .addColumn('id', 'text', (c) => c.primaryKey())
+      .addColumn('account_id', 'text', (c) =>
+        c.notNull().references('accounts.id').onDelete('cascade'),
+      )
+      .addColumn('mailbox_id', 'text', (c) =>
+        c.notNull().references('mailboxes.id').onDelete('cascade'),
+      )
+      .addColumn('remote_uid', 'integer', (c) => c.notNull())
+      .addColumn('message_id', 'text')
+      .addColumn('in_reply_to', 'text')
+      .addColumn('from_address', 'text')
+      .addColumn('from_name', 'text')
+      .addColumn('to_addresses', 'text', (c) => c.notNull().defaultTo('[]'))
+      .addColumn('cc_addresses', 'text', (c) => c.notNull().defaultTo('[]'))
+      .addColumn('subject', 'text', (c) => c.notNull().defaultTo(''))
+      .addColumn('text_body', 'text')
+      .addColumn('html_body', 'text')
+      .addColumn('snippet', 'text', (c) => c.notNull().defaultTo(''))
+      .addColumn('date', 'text')
+      .addColumn('internal_date', 'text')
+      .addColumn('size', 'integer', (c) => c.notNull().defaultTo(0))
+      .addColumn('has_attachments', 'integer', (c) => c.notNull().defaultTo(0))
+      .addColumn('seen', 'integer', (c) => c.notNull().defaultTo(0))
+      .addColumn('flagged', 'integer', (c) => c.notNull().defaultTo(0))
+      .addColumn('answered', 'integer', (c) => c.notNull().defaultTo(0))
+      .addColumn('created_at', 'text', (c) => c.notNull())
+      .addColumn('updated_at', 'text', (c) => c.notNull())
+      // 重複判定は account + mailbox + UID（Message-ID だけでは判定しない）
+      .addUniqueConstraint('uq_messages_account_mailbox_uid', [
+        'account_id',
+        'mailbox_id',
+        'remote_uid',
+      ])
+      .execute()
+    await db.schema.createIndex('idx_messages_date').on('messages').column('date').execute()
+    await db.schema
+      .createIndex('idx_messages_account_date')
+      .on('messages')
+      .columns(['account_id', 'date'])
+      .execute()
+    await db.schema
+      .createIndex('idx_messages_mailbox')
+      .on('messages')
+      .column('mailbox_id')
+      .execute()
+    await db.schema
+      .createIndex('idx_messages_message_id')
+      .on('messages')
+      .column('message_id')
+      .execute()
+    await db.schema
+      .createIndex('idx_messages_from')
+      .on('messages')
+      .column('from_address')
+      .execute()
+
+    await db.schema
+      .createTable('attachments')
+      .addColumn('id', 'text', (c) => c.primaryKey())
+      .addColumn('message_id', 'text', (c) =>
+        c.notNull().references('messages.id').onDelete('cascade'),
+      )
+      .addColumn('filename', 'text', (c) => c.notNull())
+      .addColumn('content_type', 'text', (c) => c.notNull())
+      .addColumn('size', 'integer', (c) => c.notNull().defaultTo(0))
+      .addColumn('part_id', 'text')
+      .addColumn('content_id', 'text')
+      .addColumn('storage_path', 'text')
+      .addColumn('created_at', 'text', (c) => c.notNull())
+      .execute()
+    await db.schema
+      .createIndex('idx_attachments_message')
+      .on('attachments')
+      .column('message_id')
+      .execute()
+
+    if (currentDriver === 'sqlite') {
+      // 全文検索: trigram トークナイザーは日本語などスペースで区切られない言語でも部分一致できる
+      await sql`CREATE VIRTUAL TABLE messages_fts USING fts5(message_id UNINDEXED, subject, from_text, to_text, body, attachments, tokenize='trigram')`.execute(
+        db,
+      )
+      await sql`CREATE TRIGGER messages_fts_ad AFTER DELETE ON messages BEGIN DELETE FROM messages_fts WHERE message_id = old.id; END`.execute(
+        db,
+      )
+    } else {
+      await sql`CREATE INDEX idx_messages_subject_trgm ON messages (lower(subject))`.execute(db)
+    }
+  },
+  async down(db: Kysely<unknown>) {
+    if (currentDriver === 'sqlite') {
+      await sql`DROP TRIGGER IF EXISTS messages_fts_ad`.execute(db)
+      await sql`DROP TABLE IF EXISTS messages_fts`.execute(db)
+    }
+    await db.schema.dropTable('attachments').execute()
+    await db.schema.dropTable('messages').execute()
+    await db.schema.dropTable('mailboxes').execute()
+  },
+}
+
+migrations['0003_forwards'] = {
+  async up(db: Kysely<unknown>) {
+    // 転送履歴。(message_id, to_address) で重複転送を防ぐ。
+    await db.schema
+      .createTable('forwards')
+      .addColumn('message_id', 'text', (c) =>
+        c.notNull().references('messages.id').onDelete('cascade'),
+      )
+      .addColumn('to_address', 'text', (c) => c.notNull())
+      .addColumn('forwarded_at', 'text', (c) => c.notNull())
+      .addPrimaryKeyConstraint('pk_forwards', ['message_id', 'to_address'])
+      .execute()
+    await db.schema.createIndex('idx_forwards_to').on('forwards').column('to_address').execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropTable('forwards').execute()
+  },
+}
+
+migrations['0004_forward_targets'] = {
+  async up(db: Kysely<unknown>) {
+    await db.schema
+      .createTable('forward_targets')
+      .addColumn('id', 'text', (c) => c.primaryKey())
+      .addColumn('address', 'text', (c) => c.notNull().unique())
+      .addColumn('label', 'text')
+      .addColumn('created_at', 'text', (c) => c.notNull())
+      .execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropTable('forward_targets').execute()
+  },
+}
+
+migrations['0005_forward_rules'] = {
+  async up(db: Kysely<unknown>) {
+    await db.schema
+      .createTable('forward_rules')
+      .addColumn('id', 'text', (c) => c.primaryKey())
+      .addColumn('keyword', 'text', (c) => c.notNull())
+      .addColumn('match_field', 'text', (c) => c.notNull().defaultTo('any'))
+      .addColumn('to_address', 'text', (c) => c.notNull())
+      .addColumn('enabled', 'integer', (c) => c.notNull().defaultTo(1))
+      .addColumn('created_at', 'text', (c) => c.notNull())
+      .execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropTable('forward_rules').execute()
+  },
+}
+
+migrations['0006_enable_auto_sync'] = {
+  async up(db: Kysely<unknown>) {
+    // 既存インストールで自動同期が無効(0)のまま保存されている場合、既定の 15 分へ引き上げて
+    // 自動受信を有効にする。ユーザーが後から変更した値（0 以外）はそのまま維持する。
+    await sql`UPDATE settings SET value = '15' WHERE key = 'autoSyncIntervalMin' AND value = '0'`.execute(db)
+  },
+  async down() {
+    // 値の変更のみで元の値は保持していないため、ロールバックでは何もしない。
+  },
+}
+
+migrations['0007_auto_sync_one_minute'] = {
+  async up(db: Kysely<unknown>) {
+    // 自動受信をほぼリアルタイム（1 分間隔）にする。0006 で自動設定した 15 分の値を 1 分へ引き下げる。
+    // ユーザーが明示的に無効化(0)した場合や 15 以外の任意の値はそのまま維持する。
+    await sql`UPDATE settings SET value = '1' WHERE key = 'autoSyncIntervalMin' AND value = '15'`.execute(db)
+  },
+  async down() {
+    // 値の変更のみでロールバックはしない。
+  },
+}
+
+migrations['0008_auto_sync_seconds'] = {
+  async up(db: Kysely<unknown>) {
+    // 既存インストール（settings に行がある）で秒間隔が未設定なら 15 秒を設定する。
+    // 新規DB（settings が空）には入れないので、初期値は分設定（既定 1 分）のまま。
+    await sql`
+      INSERT INTO settings (key, value)
+      SELECT 'autoSyncIntervalSec', '15'
+      WHERE EXISTS (SELECT 1 FROM settings)
+        AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'autoSyncIntervalSec')
+    `.execute(db)
+  },
+  async down() {
+    // 追加した設定行は残す（ロールバックしない）。
+  },
+}
+
+migrations['0009_fts_rowid'] = {
+  async up(db: Kysely<unknown>) {
+    // 削除の高速化。従来の削除トリガー `DELETE FROM messages_fts WHERE message_id = old.id` は
+    // message_id が UNINDEXED のため全文検索表を毎回全走査していた（6 万件で 1 件あたり約 2.7 秒）。
+    // messages に FTS 行の rowid を控え、トリガーは rowid で消す（数ミリ秒）。
+    if (currentDriver === 'sqlite') {
+      const cols = await sql<{ name: string }>`PRAGMA table_info(messages)`.execute(db)
+      if (!cols.rows.some((c) => c.name === 'fts_rowid'))
+        await db.schema.alterTable('messages').addColumn('fts_rowid', 'integer').execute()
+      await realignFtsRowids(db)
+      await sql`DROP TRIGGER IF EXISTS messages_fts_ad`.execute(db)
+      await sql`CREATE TRIGGER messages_fts_ad AFTER DELETE ON messages BEGIN DELETE FROM messages_fts WHERE rowid = old.fts_rowid; END`.execute(
+        db,
+      )
+    } else {
+      await db.schema.alterTable('messages').addColumn('fts_rowid', 'integer').execute()
+    }
+  },
+  async down(db: Kysely<unknown>) {
+    if (currentDriver === 'sqlite') {
+      await sql`DROP TRIGGER IF EXISTS messages_fts_ad`.execute(db)
+      await sql`CREATE TRIGGER messages_fts_ad AFTER DELETE ON messages BEGIN DELETE FROM messages_fts WHERE message_id = old.id; END`.execute(
+        db,
+      )
+    }
+    await db.schema.alterTable('messages').dropColumn('fts_rowid').execute()
+  },
+}
+
+/**
+ * messages.fts_rowid を messages_fts の rowid から埋め直し、対応するメールが無い FTS 行
+ * （削除済み・重複）を消す。全文検索表の全走査を 2 回行うので、通常は移行時に一度だけ呼ぶ。
+ */
+export async function realignFtsRowids(db: Kysely<unknown>): Promise<void> {
+  await sql`CREATE TEMP TABLE IF NOT EXISTS fts_rowid_map (message_id TEXT PRIMARY KEY, fts_rowid INTEGER NOT NULL)`.execute(
+    db,
+  )
+  await sql`DELETE FROM fts_rowid_map`.execute(db)
+  await sql`INSERT OR IGNORE INTO fts_rowid_map (message_id, fts_rowid) SELECT message_id, rowid FROM messages_fts`.execute(
+    db,
+  )
+  await sql`UPDATE messages SET fts_rowid = (SELECT fts_rowid FROM fts_rowid_map WHERE fts_rowid_map.message_id = messages.id)`.execute(
+    db,
+  )
+  await sql`DELETE FROM messages_fts WHERE rowid NOT IN (SELECT fts_rowid FROM messages WHERE fts_rowid IS NOT NULL)`.execute(
+    db,
+  )
+  await sql`DROP TABLE IF EXISTS fts_rowid_map`.execute(db)
+}
+
+migrations['0010_account_groups'] = {
+  async up(db: Kysely<unknown>) {
+    // アカウントのグループ管理。accounts.group_id は任意で、グループ削除時は null に戻す。
+    await db.schema
+      .createTable('account_groups')
+      .addColumn('id', 'text', (c) => c.primaryKey())
+      .addColumn('name', 'text', (c) => c.notNull().unique())
+      .addColumn('created_at', 'text', (c) => c.notNull())
+      .addColumn('updated_at', 'text', (c) => c.notNull())
+      .execute()
+    await db.schema
+      .alterTable('accounts')
+      .addColumn('group_id', 'text', (c) => c.references('account_groups.id').onDelete('set null'))
+      .execute()
+    await db.schema.createIndex('idx_accounts_group').on('accounts').column('group_id').execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropIndex('idx_accounts_group').execute()
+    await db.schema.alterTable('accounts').dropColumn('group_id').execute()
+    await db.schema.dropTable('account_groups').execute()
+  },
+}
+
+migrations['0011_forward_attempts'] = {
+  async up(db: Kysely<unknown>) {
+    // 転送失敗の記録。成功したら行を消す。自動転送は next_retry_at が過ぎたものだけ再試行する。
+    await db.schema
+      .createTable('forward_attempts')
+      .addColumn('message_id', 'text', (c) =>
+        c.notNull().references('messages.id').onDelete('cascade'),
+      )
+      .addColumn('to_address', 'text', (c) => c.notNull())
+      .addColumn('attempts', 'integer', (c) => c.notNull().defaultTo(1))
+      .addColumn('last_error', 'text')
+      .addColumn('last_attempt_at', 'text', (c) => c.notNull())
+      .addColumn('next_retry_at', 'text', (c) => c.notNull())
+      .addPrimaryKeyConstraint('pk_forward_attempts', ['message_id', 'to_address'])
+      .execute()
+    await db.schema
+      .createIndex('idx_forward_attempts_next')
+      .on('forward_attempts')
+      .column('next_retry_at')
+      .execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropTable('forward_attempts').execute()
+  },
+}
+
+migrations['0012_forward_log'] = {
+  async up(db: Kysely<unknown>) {
+    // 転送済みの恒久ログ（messages に FK を持たない）。既存の forwards から可能な分を移す。
+    await db.schema
+      .createTable('forward_log')
+      .addColumn('account_email', 'text', (c) => c.notNull())
+      .addColumn('message_key', 'text', (c) => c.notNull())
+      .addColumn('to_address', 'text', (c) => c.notNull())
+      .addColumn('forwarded_at', 'text', (c) => c.notNull())
+      .addPrimaryKeyConstraint('pk_forward_log', ['account_email', 'message_key', 'to_address'])
+      .execute()
+    await sql`
+      INSERT INTO forward_log (account_email, message_key, to_address, forwarded_at)
+      SELECT lower(a.email), trim(m.message_id), lower(f.to_address), f.forwarded_at
+      FROM forwards f
+      JOIN messages m ON m.id = f.message_id
+      JOIN accounts a ON a.id = m.account_id
+      WHERE m.message_id IS NOT NULL AND trim(m.message_id) <> ''
+      ON CONFLICT DO NOTHING
+    `.execute(db)
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropTable('forward_log').execute()
+  },
+}
+
+migrations['0013_store_attachments_default'] = {
+  async up(db: Kysely<unknown>) {
+    // 転送を高速化するため、同期時に添付本体を保存する設定をこのアップグレードで ON にする。
+    // （既定値の変更だけでは、以前に保存された 'false' が残るアプリで有効にならないため、明示的に上書きする。
+    //  以後オフにしたい場合は設定画面で切り替えられる。）
+    await sql`
+      INSERT INTO settings (key, value) VALUES ('storeAttachments', '1')
+      ON CONFLICT(key) DO UPDATE SET value = '1'
+    `.execute(db)
+  },
+  async down() {
+    // 追加した設定行は残す（ロールバックしない）。
+  },
+}
+
+const provider: MigrationProvider = {
+  async getMigrations() {
+    return migrations
+  },
+}
+
+export async function migrateToLatest(db: Kysely<unknown>): Promise<void> {
+  const migrator = new Migrator({ db, provider })
+  const { error, results } = await migrator.migrateToLatest()
+  if (error) {
+    const failed = results?.find((r: { status: string }) => r.status === 'Error')
+    throw new Error(
+      `Migration failed${failed ? ` at ${failed.migrationName}` : ''}: ${String(error)}`,
+    )
+  }
+}

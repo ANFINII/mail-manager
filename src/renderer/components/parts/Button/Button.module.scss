@@ -1,0 +1,51 @@
+.button {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    border-color: #9ca3af;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &.sm {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  &.md {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  &.primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--primary-text);
+
+    &:hover:not(:disabled) {
+      border-color: var(--primary);
+      filter: brightness(0.95);
+    }
+  }
+
+  &.danger {
+    color: var(--danger);
+    border-color: #fca5a5;
+  }
+
+  &.link {
+    background: none;
+    border: none;
+    color: var(--primary);
+    padding: 0;
+    text-align: left;
+  }
+}
