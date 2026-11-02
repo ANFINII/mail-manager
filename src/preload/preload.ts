@@ -15,6 +15,11 @@ const api: RendererApi = {
   showItemInFolder: (p) => ipcRenderer.invoke('shell.showItemInFolder', p),
   openPath: (p) => ipcRenderer.invoke('shell.openPath', p),
   openExternal: (url) => ipcRenderer.invoke('shell.openExternal', url),
+  remote: {
+    get: () => ipcRenderer.invoke('remote.get'),
+    test: (url, token) => ipcRenderer.invoke('remote.test', url, token),
+    set: (next) => ipcRenderer.invoke('remote.set', next),
+  },
   lock: {
     status: () => ipcRenderer.invoke('lock.status'),
     lockNow: () => ipcRenderer.invoke('lock.lockNow'),

@@ -6,6 +6,7 @@ import type {
   ForwardFailureListResult,
   IdleStatus,
   LockStatus,
+  RemoteConfig,
   CodeListQuery,
   MailTemplate,
   MailOpSummary,
@@ -251,6 +252,13 @@ export interface RendererApi {
   openPath(path: string): Promise<void>;
   /** https の URL を既定のブラウザで開く（OAuth ログイン用） */
   openExternal(url: string): Promise<void>;
+  /** 接続先（このPC / 共有サーバー）。変更するとアプリが再起動する */
+  remote: {
+    get(): Promise<RemoteConfig>;
+    /** 接続を試し、サーバーのバージョンを返す（token 省略時は保存済みのトークン） */
+    test(url: string, token?: string): Promise<string>;
+    set(next: { mode: 'local' | 'remote'; url: string; token?: string }): Promise<RemoteConfig>;
+  };
   /** アプリのロック（メインプロセスが管理。ロック中は call が LOCKED で失敗する） */
   lock: {
     status(): Promise<LockStatus>;

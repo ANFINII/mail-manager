@@ -422,6 +422,7 @@ export const ja = {
     envWarning: '次の環境変数が設定を上書きしています（開発・テスト用）',
   },
   keyMode: {
+    server: '共有サーバー（サーバー側の鍵ファイル / 環境変数）',
     keychain: 'OS の安全なストレージ（macOS Keychain / Windows DPAPI / Linux キーリング）',
     'basic-text': '保護が弱い状態です（Linux でキーリングが見つかりません。GNOME Keyring か KWallet を有効にしてください）',
     'insecure-file': 'ファイル保存（テスト専用・保護なし）',
@@ -755,6 +756,20 @@ export const ja = {
     unchanged: '取得方法は変わりませんでした',
     hintGraph: 'Graph は Mail.ReadWrite の同意が必要です（「ブラウザで再サインイン」で「Graph API で取得」を選ぶ）。プッシュ受信（IDLE）は使えず定期同期になります。',
     hintGmail: 'Gmail API は IMAP と同じ同意（https://mail.google.com/）で使えます。プッシュ受信（IDLE）は使えず定期同期になります。',
+  },
+  remote: {
+    title: '接続先（チームで共有）',
+    hint: '共有サーバー（npm run server）につなぐと、アカウント・メール・ルール・履歴を複数の PC やメンバーで共有できます。認証情報はサーバーが暗号化して持ち、この PC には保存しません。監査ログにはトークンの名前が残ります。',
+    local: 'この PC（単独で使う）',
+    remote: '共有サーバー',
+    url: 'サーバーの URL',
+    token: 'アクセストークン',
+    test: '接続テスト',
+    ok: '接続できました（サーバー {{version}}）',
+    saveRestart: '保存して再起動',
+    confirmRestart: '接続先を切り替えるため、アプリを再起動します。よろしいですか？',
+    currentLocal: '現在: この PC',
+    currentRemote: '現在: {{url}}',
   },
   autoSync: {
     on: '自動同期: ON',

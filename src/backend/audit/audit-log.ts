@@ -80,7 +80,13 @@ export class AuditLog {
     return method in AUDITED
   }
 
-  async recordCall(method: RpcMethod, params: unknown, result: unknown, error: unknown | null): Promise<void> {
+  async recordCall(
+    method: RpcMethod,
+    params: unknown,
+    result: unknown,
+    error: unknown | null,
+    actor?: string,
+  ): Promise<void> {
     if (method === 'storage.cleanup' && (params as { dryRun?: boolean } | undefined)?.dryRun) return
     const summarize = AUDITED[method] as Summarizer<RpcMethod> | undefined
     if (!summarize) return
@@ -97,6 +103,7 @@ export class AuditLog {
       detail: summary.detail ?? null,
       ok: !error,
       error: error ? (error instanceof Error ? error.message : String(error)).slice(0, 300) : null,
+      actor,
     })
   }
 

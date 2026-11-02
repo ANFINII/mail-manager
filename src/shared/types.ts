@@ -328,7 +328,7 @@ export interface AppInfo {
   dbPath: string;
   logPath: string;
   /** keychain: OS の安全なストレージ / basic-text: Linux でキーリングが無く保護が弱い / insecure-file: テスト専用 */
-  keyMode: 'keychain' | 'insecure-file' | 'basic-text' | 'unknown';
+  keyMode: 'keychain' | 'insecure-file' | 'basic-text' | 'server' | 'unknown';
   envOverrides: string[];
 }
 
@@ -785,3 +785,11 @@ export interface AuditQuery {
 
 /** メールの取得方法: IMAP / Microsoft Graph API / Gmail API（OAuth2 アカウントのみ API を選べる） */
 export type FetchVia = 'imap' | 'graph' | 'gmail_api';
+
+/** 接続先: このPC のバックエンド / 共有サーバー */
+export interface RemoteConfig {
+  mode: 'local' | 'remote';
+  url: string;
+  /** トークンが保存済みか（値そのものは画面に返さない） */
+  hasToken: boolean;
+}

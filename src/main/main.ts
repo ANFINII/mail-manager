@@ -6,6 +6,7 @@ import {
   ipcMain,
   Notification,
   powerMonitor,
+  safeStorage,
   shell,
   systemPreferences,
 } from 'electron'
@@ -14,6 +15,8 @@ import { updateElectronApp, UpdateSourceType } from 'update-electron-app'
 import { BackendHost } from './backend-host'
 import { loadOrCreateMasterKey } from './key-provider'
 import { LockManager } from './lock-manager'
+import { RemoteConfigStore, testRemote } from './remote-config'
+import { RemoteHost } from './remote-host'
 
 // Windows のインストーラー（Squirrel）がショートカット作成などのために起動したときは、すぐ終了する
 if (squirrelStartup) app.quit()
@@ -36,7 +39,7 @@ if (
 // テスト・開発用: userData の場所を差し替える
 if (process.env.MM_USER_DATA) app.setPath('userData', process.env.MM_USER_DATA)
 
-let host: BackendHost | null = null
+let host: BackendHost | RemoteHost | null = null
 let lock: LockManager | null = null
 
 /** アプリのロック操作を監査ログに残す（バックエンドがまだ起動していなければ捨てる） */
@@ -76,15 +79,41 @@ function createWindow(): BrowserWindow {
 
 app.whenReady().then(async () => {
   const userData = app.getPath('userData')
-  let masterKey
+  const remoteConfig = new RemoteConfigStore(path.join(userData, 'remote.json'), safeStorage)
+  let remote: { url: string; token: string } | null
   try {
-    masterKey = await loadOrCreateMasterKey(userData, {
-      allowInsecure: process.env.MM_INSECURE_KEY_FILE === '1',
-    })
-  } catch (err) {
-    dialog.showErrorBox('暗号鍵を用意できません', err instanceof Error ? err.message : String(err))
-    app.quit()
-    return
+    remote = remoteConfig.connection()
+  } catch {
+    remote = null // 復号できない（別の PC からコピーした等）ときはこの PC のバックエンドで起動する
+  }
+  ipcMain.handle('remote.get', () => remoteConfig.get())
+  ipcMain.handle('remote.test', (_e, url: unknown, token: unknown) => {
+    const saved = remoteConfig.connection()
+    return testRemote(String(url ?? ''), String(token || saved?.token || ''))
+  })
+  ipcMain.handle('remote.set', (_e, next: { mode: 'local' | 'remote'; url: string; token?: string }) => {
+    assertUnlocked()
+    const r = remoteConfig.set(next)
+    // 接続先を切り替えるにはアプリを起動し直す
+    setTimeout(() => {
+      app.relaunch()
+      app.exit(0)
+    }, 300)
+    return r
+  })
+
+  // 共有サーバーにつなぐ場合、認証情報はサーバーが持つのでこの PC の暗号鍵は使わない
+  let masterKey: Awaited<ReturnType<typeof loadOrCreateMasterKey>> | null = null
+  if (!remote) {
+    try {
+      masterKey = await loadOrCreateMasterKey(userData, {
+        allowInsecure: process.env.MM_INSECURE_KEY_FILE === '1',
+      })
+    } catch (err) {
+      dialog.showErrorBox('暗号鍵を用意できません', err instanceof Error ? err.message : String(err))
+      app.quit()
+      return
+    }
   }
 
   const touchIdAvailable = () => {
@@ -144,14 +173,16 @@ app.whenReady().then(async () => {
     audited('lock.configure', () => lock!.configure(opts)),
   )
 
-  host = new BackendHost({
-    scriptPath: path.join(__dirname, 'backend.js'),
-    userDataPath: userData,
-    masterKey: masterKey.key,
-    keyMode: masterKey.mode,
-    version: app.getVersion(),
-    env: process.env,
-  })
+  host = remote
+    ? new RemoteHost({ url: remote.url, token: remote.token, cacheDir: path.join(userData, 'remote-attachments') })
+    : new BackendHost({
+        scriptPath: path.join(__dirname, 'backend.js'),
+        userDataPath: userData,
+        masterKey: masterKey!.key,
+        keyMode: masterKey!.mode,
+        version: app.getVersion(),
+        env: process.env,
+      })
   host.onEvent((event) => {
     // ロック中は画面へデータを送らない（解除時に画面が全体を読み直す）
     if (!lock?.isLocked())

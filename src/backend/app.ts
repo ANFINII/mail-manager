@@ -768,18 +768,21 @@ export class BackendApp {
   async call<M extends RpcMethod>(
     method: M,
     params: RpcMethods[M]['params'],
+    ctx: { actor?: string } = {},
   ): Promise<RpcMethods[M]['result']> {
     const handler = this.handlers[method] as
       ((p: RpcMethods[M]['params']) => Promise<RpcMethods[M]['result']>) | undefined
     if (!handler) throw new Error(`Unknown method: ${String(method)}`)
+    if (method === 'audit.record')
+      return this.audit.record({ ...(params as RpcMethods['audit.record']['params']), actor: ctx.actor }) as never
     if (!this.audit.shouldRecord(method)) return handler(params)
     // 重要な操作は成功・失敗とも監査ログに残す（記録の失敗で操作自体は失敗させない）
     try {
       const result = await handler(params)
-      await this.audit.recordCall(method, params, result, null).catch(() => undefined)
+      await this.audit.recordCall(method, params, result, null, ctx.actor).catch(() => undefined)
       return result
     } catch (err) {
-      await this.audit.recordCall(method, params, undefined, err).catch(() => undefined)
+      await this.audit.recordCall(method, params, undefined, err, ctx.actor).catch(() => undefined)
       throw err
     }
   }

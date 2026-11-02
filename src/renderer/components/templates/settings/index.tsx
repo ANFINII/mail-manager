@@ -5,6 +5,7 @@ import { useAppStore } from 'stores/app-store'
 import type { ForwardTarget } from '@shared/types'
 import type { Settings } from '@shared/types'
 import { api, errorMessage } from 'lib/api'
+import ConnectionPanel from 'components/widgets/ConnectionPanel'
 import LockPanel from 'components/widgets/LockPanel'
 import ReportPanel from 'components/widgets/ReportPanel'
 import StoragePanel from 'components/widgets/StoragePanel'
@@ -388,6 +389,8 @@ export default function SettingsTemplate() {
           </table>
         )}
       </section>
+
+      <ConnectionPanel />
 
       <LockPanel />
 

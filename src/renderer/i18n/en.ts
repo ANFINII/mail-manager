@@ -425,6 +425,7 @@ export const en: Translation = {
     envWarning: 'These environment variables override settings (dev/test only)',
   },
   keyMode: {
+    server: 'Shared server (key file / environment on the server)',
     keychain: 'OS secure storage (macOS Keychain / Windows DPAPI / Linux keyring)',
     'basic-text': 'Weak protection (no keyring found on Linux; enable GNOME Keyring or KWallet)',
     'insecure-file': 'Plain file (tests only, unprotected)',
@@ -759,6 +760,20 @@ export const en: Translation = {
     unchanged: 'Fetch method unchanged',
     hintGraph: 'Graph needs Mail.ReadWrite consent ("Sign in again in browser" with "Fetch via Graph API"). Push (IDLE) is not available; periodic sync is used.',
     hintGmail: 'The Gmail API uses the same consent as IMAP (https://mail.google.com/). Push (IDLE) is not available; periodic sync is used.',
+  },
+  remote: {
+    title: 'Connection (team sharing)',
+    hint: 'Connect to a shared server (npm run server) to share accounts, mail, rules and history across computers and team members. Credentials are kept encrypted on the server, not on this computer. The audit log records the token name.',
+    local: 'This computer (standalone)',
+    remote: 'Shared server',
+    url: 'Server URL',
+    token: 'Access token',
+    test: 'Test connection',
+    ok: 'Connected (server {{version}})',
+    saveRestart: 'Save and restart',
+    confirmRestart: 'The app will restart to switch the connection. Continue?',
+    currentLocal: 'Current: this computer',
+    currentRemote: 'Current: {{url}}',
   },
   autoSync: {
     on: 'Auto sync: ON',

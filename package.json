@@ -18,7 +18,8 @@
     "test:e2e": "playwright test",
     "gen:csv": "node --import tsx scripts/gen-accounts-csv.ts",
     "dev:servers": "node --import tsx scripts/dev-servers.ts",
-    "publish": "electron-forge publish"
+    "publish": "electron-forge publish",
+    "server": "node --import tsx src/server/main.ts"
   },
   "license": "MIT",
   "dependencies": {
