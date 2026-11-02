@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { Settings } from '@shared/types'
 import { parseFetchedMessage, type ParsedMessage } from './message-parser'
+import { extractCode } from '../codes/extract-code'
 import type { MailboxRepository } from '../db/mailbox-repository'
 import type {
   FtsRow,
@@ -182,6 +183,7 @@ export async function syncAccount(ctx: SyncContext): Promise<SyncOutcome> {
         }
         const id = randomUUID()
         const hasAttachments = parsed.attachments.length > 0
+        const otp = extractCode({ subject: parsed.subject, text: parsed.text, html: parsed.html })
         messageRows.push({
           id,
           account_id: account.id,
@@ -204,6 +206,9 @@ export async function syncAccount(ctx: SyncContext): Promise<SyncOutcome> {
           seen: meta.flags.has('\\Seen') ? 1 : 0,
           flagged: meta.flags.has('\\Flagged') ? 1 : 0,
           answered: meta.flags.has('\\Answered') ? 1 : 0,
+          otp_code: otp.code,
+          otp_link: otp.link,
+          otp_scanned: 1,
           created_at: now,
           updated_at: now,
         })

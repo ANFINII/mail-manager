@@ -511,6 +511,24 @@ migrations['0017_postgres_trigram_search'] = {
   },
 }
 
+migrations['0018_message_codes'] = {
+  async up(db: Kysely<unknown>) {
+    // 認証コード・確認リンクの抽出結果。otp_scanned = 0 の既存メールは起動後にバックグラウンドで抽出する
+    await db.schema.alterTable('messages').addColumn('otp_code', 'text').execute()
+    await db.schema.alterTable('messages').addColumn('otp_link', 'text').execute()
+    await db.schema
+      .alterTable('messages')
+      .addColumn('otp_scanned', 'integer', (c) => c.notNull().defaultTo(0))
+      .execute()
+    await db.schema.createIndex('idx_messages_otp_scanned').on('messages').column('otp_scanned').execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropIndex('idx_messages_otp_scanned').execute()
+    for (const c of ['otp_scanned', 'otp_link', 'otp_code'])
+      await db.schema.alterTable('messages').dropColumn(c).execute()
+  },
+}
+
 const provider: MigrationProvider = {
   async getMigrations() {
     return migrations

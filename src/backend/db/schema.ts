@@ -92,6 +92,12 @@ export interface MessagesTable {
   updated_at: string;
   /** SQLite のみ: 対応する messages_fts 行の rowid（削除トリガーが全文検索表を走査せずに消すため） */
   fts_rowid: number | null;
+  /** 本文から抽出した認証コード（無ければ null） */
+  otp_code: string | null;
+  /** 本文から抽出した確認・ログインリンク（無ければ null） */
+  otp_link: string | null;
+  /** 1 = 抽出済み（既存メールのバックフィル用） */
+  otp_scanned: number;
 }
 
 export interface AttachmentsTable {

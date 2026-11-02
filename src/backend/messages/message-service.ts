@@ -80,6 +80,8 @@ export function toMessageSummary(row: MessageWithContext): MessageSummary {
     flagged: row.flagged === 1,
     snippet: row.snippet,
     forwarded: (row.forward_count ?? 0) > 0,
+    otpCode: row.otp_code ?? null,
+    otpLink: row.otp_link ?? null,
   }
 }
 

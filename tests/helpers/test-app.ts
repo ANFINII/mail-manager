@@ -35,6 +35,7 @@ export async function createTestApp(
     MM_AUTO_SYNC_INTERVAL_MIN: '0',
     MM_AUTO_SYNC_INTERVAL_SEC: '0',
     MM_STORAGE_SCHEDULE: '0',
+    MM_CODE_BACKFILL: '0',
     ...(overrides.env ?? {}),
   };
   const logger = createLogger({ level: 'debug', sinks: [logs], console: false });

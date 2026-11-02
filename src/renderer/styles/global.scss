@@ -798,3 +798,39 @@ code {
   gap: 4px;
   font-size: 12px;
 }
+
+/* 認証コード */
+.code-chip-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.code-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #b7c7ef;
+  background: #eef3ff;
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.code-chip:hover {
+  background: #dde7ff;
+}
+.code-chip-action {
+  font-size: 11px;
+  font-weight: normal;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+.btn-small {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.simple-table tr.unread td {
+  font-weight: 600;
+}

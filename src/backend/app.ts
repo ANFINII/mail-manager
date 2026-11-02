@@ -7,6 +7,7 @@ import { AccountGroupService } from './accounts/account-group-service'
 import { AccountService } from './accounts/account-service'
 import { ImportService } from './accounts/import-service'
 import { AuthTestService } from './auth/auth-test-service'
+import { CodeService } from './codes/code-service'
 import { SettingsService } from './config/settings-service'
 import { AccountGroupRepository } from './db/account-group-repository'
 import { AccountRepository } from './db/account-repository'
@@ -84,6 +85,7 @@ export class BackendApp {
     readonly rules: RuleEngine,
     readonly storage: StorageService,
     readonly oauthLogin: OAuthLoginService,
+    readonly codes: CodeService,
     private readonly idleSyncBatch: Batcher<string>,
     private readonly scheduler: AutoSyncScheduler,
     private readonly appInfo: AppInfo,
@@ -280,6 +282,12 @@ export class BackendApp {
         return id
       },
     })
+    const codes = new CodeService(db, logger)
+    // 抽出前の既存メール（このバージョンより前に取り込んだもの）を起動後に少しずつ処理する
+    if (env.MM_CODE_BACKFILL !== '0') {
+      const t = setTimeout(() => void codes.backfill().catch(() => undefined), 3000)
+      t.unref?.()
+    }
     const search = new SearchService(messageRepo)
     const exporter = new ExportService(accountRepo, search, groupRepo, cipher, logger)
     const health = new HealthService(accountRepo, messageRepo, () => settings.get().healthStaleHours)
@@ -362,6 +370,7 @@ export class BackendApp {
       rules,
       storage,
       oauthLogin,
+      codes,
       idleSyncBatch,
       scheduler,
       info,
@@ -649,6 +658,7 @@ export class BackendApp {
     'oauth.start': (p) => this.oauthLogin.start(p),
     'oauth.status': async (p) => this.oauthLogin.status(p.sessionId),
     'oauth.cancel': async (p) => this.oauthLogin.cancel(p.sessionId),
+    'codes.list': (p) => this.codes.list(p ?? {}),
     'storage.stats': () => this.storage.stats(),
     'storage.cleanup': (p) => this.storage.cleanup({ dryRun: p?.dryRun }),
     'storage.vacuum': () => this.storage.vacuum(),
@@ -670,6 +680,7 @@ export class BackendApp {
     this.scheduler.stop()
     this.storage.stopSchedule()
     this.oauthLogin.dispose()
+    this.codes.stop()
     await this.idle.stop()
     this.idleSyncBatch.dispose()
     this.authTest.dispose()

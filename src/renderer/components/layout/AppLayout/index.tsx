@@ -35,6 +35,9 @@ export default function AppLayout(): React.JSX.Element {
         <Link to="/search" activeProps={{ className: 'active' }}>
           {t('nav.search')}
         </Link>
+        <Link to="/codes" activeProps={{ className: 'active' }}>
+          {t('nav.codes')}
+        </Link>
         <Link to="/sent" activeProps={{ className: 'active' }}>
           {t('nav.sent')}
         </Link>

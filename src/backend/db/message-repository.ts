@@ -5,7 +5,8 @@ import { realignFtsRowids, type DbDriver } from './migrations'
 import type { AttachmentRow, Database, MessageRow } from './schema'
 
 /** 挿入時は fts_rowid を持たなくてよい（insertMany が FTS 行を作った後に埋める） */
-export type NewMessageRow = Omit<MessageRow, 'fts_rowid'> & { fts_rowid?: number | null };
+export type NewMessageRow = Omit<MessageRow, 'fts_rowid' | 'otp_code' | 'otp_link' | 'otp_scanned'> &
+  Partial<Pick<MessageRow, 'fts_rowid' | 'otp_code' | 'otp_link' | 'otp_scanned'>>;
 export type NewAttachmentRow = AttachmentRow;
 export interface FtsRow {
   message_id: string;
@@ -92,7 +93,14 @@ export class MessageRepository {
   ): Promise<number> {
     if (rows.length === 0) return 0
     await this.db.transaction().execute(async (trx) => {
-      const values: MessageRow[] = rows.map((r) => ({ ...r, fts_rowid: r.fts_rowid ?? null }))
+      const values: MessageRow[] = rows.map((r) => ({
+        ...r,
+        fts_rowid: r.fts_rowid ?? null,
+        otp_code: r.otp_code ?? null,
+        otp_link: r.otp_link ?? null,
+        // 抽出していない行は 0 のまま入れ、バックフィルで抽出する
+        otp_scanned: r.otp_scanned ?? 0,
+      }))
       for (let i = 0; i < values.length; i += CHUNK) {
         await trx
           .insertInto('messages')

@@ -359,6 +359,10 @@ export interface MessageSummary {
   snippet: string;
   /** 少なくとも1件、いずれかの宛先へ転送済みか */
   forwarded: boolean;
+  /** 本文から抽出した認証コード */
+  otpCode: string | null;
+  /** 本文から抽出した確認・ログインリンク */
+  otpLink: string | null;
 }
 
 export interface AttachmentInfo {
@@ -613,4 +617,26 @@ export interface OAuthLoginStatus {
   email?: string;
   accountId?: string;
   error?: string;
+}
+
+export interface CodeListQuery {
+  /** 何時間前までに受信したメールを対象にするか（既定 24、0 = すべて） */
+  sinceHours?: number;
+  accountIds?: string[];
+  /** アカウント・差出人・件名の部分一致 */
+  text?: string;
+  limit?: number;
+}
+
+/** 受信メールから抽出した認証コード・確認リンク */
+export interface ReceivedCode {
+  messageId: string;
+  accountId: string;
+  accountEmail: string;
+  from: string | null;
+  subject: string;
+  receivedAt: string | null;
+  code: string | null;
+  link: string | null;
+  seen: boolean;
 }

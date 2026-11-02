@@ -42,7 +42,8 @@ export default function SearchTemplate() {
   const [result, setResult] = useState<SearchResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [openId, setOpenId] = useState<string | null>(null)
+  // 認証コード画面などから messageId 付きで開かれたら、そのメールを表示する
+  const [openId, setOpenId] = useState<string | null>(params.get('messageId'))
   // 表示モード: 'list' = 通常の一覧 / 'grouped' = アカウント別グループ
   const [viewMode, setViewMode] = useState<'list' | 'grouped'>('list')
   const [groups, setGroups] = useState<AccountGroup[] | null>(null)

@@ -214,6 +214,9 @@ export class RuleEngine {
               subject: m.subject,
               date: m.date,
               snippet: m.snippet,
+              // 認証コード・確認リンクを抽出できていれば添える（別システムへの自動入力用）
+              code: m.otp_code ?? null,
+              link: m.otp_link ?? null,
             },
             rule.to_address || undefined,
           )

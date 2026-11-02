@@ -6,6 +6,7 @@ import type { AddressInfo, MessageDetail } from '@shared/types'
 import { api, errorMessage } from 'lib/api'
 import { formatDateTime } from 'utils/format'
 import Button from 'components/parts/Button'
+import CodeChip from 'components/parts/CodeChip'
 import Forward from 'components/widgets/Forward'
 
 function formatAddr(a: AddressInfo): string {
@@ -141,6 +142,7 @@ export default function MessageViewer(props: Props): React.JSX.Element {
       <div className="viewer-head">
         <div className="viewer-head-top">
           <h2 className="viewer-subject">{detail.subject || t('viewer.noSubject')}</h2>
+          <CodeChip code={detail.otpCode} link={detail.otpLink} />
           {onClose && (
             <button
               type="button"

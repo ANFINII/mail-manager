@@ -5,6 +5,8 @@ import type {
   AccountHealth,
   ForwardFailureListResult,
   IdleStatus,
+  CodeListQuery,
+  ReceivedCode,
   OAuthLoginStart,
   OAuthLoginStatus,
   StorageCleanupResult,
@@ -156,6 +158,8 @@ export interface RpcMethods {
   };
   'oauth.status': { params: { sessionId: string }; result: OAuthLoginStatus };
   'oauth.cancel': { params: { sessionId: string }; result: void };
+  /** 受信メールから抽出した認証コード・確認リンク（新しい順） */
+  'codes.list': { params: CodeListQuery; result: ReceivedCode[] };
   'storage.stats': { params: Record<string, never>; result: StorageStats };
   /** 保存期間の設定に従ってローカルのメール・添付を整理する（dryRun で件数だけ） */
   'storage.cleanup': { params: { dryRun?: boolean }; result: StorageCleanupResult };
