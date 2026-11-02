@@ -32,6 +32,7 @@ import { MessageService } from './messages/message-service'
 import { OAuthLoginService } from './oauth/oauth-login'
 import { OAuthService } from './oauth/oauth-service'
 import { ProviderRegistry } from './providers/presets'
+import { ReportService } from './report/report-service'
 import { RuleEngine } from './rules/rule-engine'
 import { SearchService } from './search/search-service'
 import { CredentialCipher } from './security/credential-cipher'
@@ -89,6 +90,7 @@ export class BackendApp {
     readonly oauthLogin: OAuthLoginService,
     readonly codes: CodeService,
     readonly templates: TemplateRepository,
+    readonly report: ReportService,
     private readonly idleSyncBatch: Batcher<string>,
     private readonly scheduler: AutoSyncScheduler,
     private readonly appInfo: AppInfo,
@@ -123,7 +125,8 @@ export class BackendApp {
     const groupRepo = new AccountGroupRepository(db)
     const forwardRuleRepo = new ForwardRuleRepository(db)
     const messageRepo = new MessageRepository(db, dbConfig.driver)
-    const settings = new SettingsService(new SettingsRepository(db), env)
+    const settingsRepo = new SettingsRepository(db)
+    const settings = new SettingsService(settingsRepo, env)
     await settings.load()
     const attachmentsDir = path.join(opts.userDataPath, 'attachments')
     const now = () => new Date().toISOString()
@@ -301,6 +304,17 @@ export class BackendApp {
       () => authTest.activeJobs() + sync.tracker.activeCount() + messages.tracker.activeCount(),
       health,
     )
+    const report = new ReportService({
+      db,
+      settings: () => settings.get(),
+      settingsRepo,
+      stats,
+      health,
+      webhook,
+      sendMail: (accountId, to, subject, text) => messages.send(accountId, to, subject, text),
+      logger,
+    })
+    if (env.MM_REPORT_SCHEDULE !== '0') report.start()
     const scheduler = new AutoSyncScheduler(
       async () => {
         await sync.syncAccounts('authenticated')
@@ -376,6 +390,7 @@ export class BackendApp {
       oauthLogin,
       codes,
       new TemplateRepository(db),
+      report,
       idleSyncBatch,
       scheduler,
       info,
@@ -583,6 +598,11 @@ export class BackendApp {
       }))
     },
     'history.undo': (p) => this.messages.undo(p.id),
+    'report.preview': async () => {
+      const r = await this.report.build()
+      return { report: r, ...this.report.format(r) }
+    },
+    'report.send': () => this.report.send(),
     'templates.list': () => this.templates.list(),
     'templates.save': (p) => this.templates.save(p, new Date().toISOString()),
     'templates.remove': (p) => this.templates.remove(p.id),
@@ -703,6 +723,7 @@ export class BackendApp {
   async shutdown(): Promise<void> {
     this.scheduler.stop()
     this.storage.stopSchedule()
+    this.report.stop()
     this.oauthLogin.dispose()
     this.codes.stop()
     await this.idle.stop()

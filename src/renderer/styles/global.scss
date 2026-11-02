@@ -834,3 +834,14 @@ code {
 .simple-table tr.unread td {
   font-weight: 600;
 }
+
+.report-preview {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 360px;
+  overflow: auto;
+}

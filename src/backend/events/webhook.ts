@@ -7,7 +7,8 @@ export type WebhookEventName =
   | 'SYNC_COMPLETED'
   | 'SYNC_FAILED'
   | 'NEW_MESSAGE'
-  | 'RULE_MATCHED';
+  | 'RULE_MATCHED'
+  | 'DAILY_REPORT';
 
 /** 設定された URL にイベントを POST する（失敗してもアプリの処理は止めない） */
 export class WebhookNotifier {

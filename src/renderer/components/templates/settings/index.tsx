@@ -5,6 +5,7 @@ import { useAppStore } from 'stores/app-store'
 import type { ForwardTarget } from '@shared/types'
 import type { Settings } from '@shared/types'
 import { api, errorMessage } from 'lib/api'
+import ReportPanel from 'components/widgets/ReportPanel'
 import StoragePanel from 'components/widgets/StoragePanel'
 import TemplateManager from 'components/widgets/TemplateManager'
 
@@ -59,7 +60,9 @@ export default function SettingsTemplate() {
 
   const save = async () => {
     try {
-      await api.call('settings.update', form)
+      // 日次レポートの項目は ReportPanel が別に保存するので、ここでは送らない（古い値で上書きしない）
+      const { reportTime: _t, reportTo: _to, reportFromAccountId: _f, reportWebhook: _w, ...rest } = form
+      await api.call('settings.update', rest)
       await refreshSettings()
       setLanguage(lang)
       notify('info', t('settings.saved'))
@@ -384,6 +387,8 @@ export default function SettingsTemplate() {
           </table>
         )}
       </section>
+
+      <ReportPanel />
 
       <TemplateManager />
 

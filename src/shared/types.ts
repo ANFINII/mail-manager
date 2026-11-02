@@ -275,6 +275,14 @@ export interface Settings {
   retentionDays: number;
   /** この日数より古い添付ファイル本体を削除する（必要時に再取得）。0 = 無期限 */
   attachmentRetentionDays: number;
+  /** 日次レポートを送る時刻（HH:MM、ローカル時刻）。空 = 送らない */
+  reportTime: string;
+  /** 日次レポートのメール宛先（空 = メールでは送らない） */
+  reportTo: string;
+  /** 日次レポートを送る送信元アカウント ID */
+  reportFromAccountId: string;
+  /** 日次レポートを Webhook（webhookUrl）にも送る（DAILY_REPORT） */
+  reportWebhook: boolean;
 }
 
 export interface StorageStats {
@@ -679,4 +687,25 @@ export interface UndoResult {
   /** 取り消せなかった（完全削除など）件数 */
   skipped: number;
   failed: number;
+}
+
+/** 日次レポート（直近 24 時間） */
+export interface DailyReport {
+  generatedAt: string;
+  since: string;
+  newMessages: number;
+  topAccounts: Array<{ email: string; count: number }>;
+  codes: number;
+  forwarded: number;
+  forwardFailed: number;
+  accounts: {
+    total: number;
+    connected: number;
+    authError: number;
+    connectionError: number;
+    syncError: number;
+    untested: number;
+  };
+  needsAttention: Array<{ email: string; severity: HealthSeverity; reasons: HealthReason[] }>;
+  needsAttentionTotal: number;
 }

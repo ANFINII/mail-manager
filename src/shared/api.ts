@@ -8,6 +8,7 @@ import type {
   CodeListQuery,
   MailTemplate,
   MailOpSummary,
+  DailyReport,
   UndoResult,
   MailTemplateInput,
   ReceivedCode,
@@ -133,6 +134,10 @@ export interface RpcMethods {
   'history.list': { params: { limit?: number }; result: MailOpSummary[] };
   /** 履歴の操作を取り消す */
   'history.undo': { params: { id: string }; result: UndoResult };
+  /** 日次レポートの内容を作る（送らない） */
+  'report.preview': { params: Record<string, never>; result: { report: DailyReport; subject: string; text: string } };
+  /** 日次レポートを今すぐ送る */
+  'report.send': { params: Record<string, never>; result: { email: boolean; webhook: boolean } };
   'templates.list': { params: Record<string, never>; result: MailTemplate[] };
   'templates.save': { params: MailTemplateInput; result: MailTemplate[] };
   'templates.remove': { params: { id: string }; result: MailTemplate[] };

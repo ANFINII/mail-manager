@@ -23,6 +23,10 @@ export const DEFAULT_SETTINGS: Settings = {
   idleMaxConnections: 50,
   retentionDays: 0,
   attachmentRetentionDays: 0,
+  reportTime: '',
+  reportTo: '',
+  reportFromAccountId: '',
+  reportWebhook: false,
 }
 
 type Spec =
@@ -52,6 +56,10 @@ const SPECS: Record<keyof Settings, Spec> = {
   idleMaxConnections: { kind: 'int', min: 1, max: 1000 },
   retentionDays: { kind: 'int', min: 0, max: 36500 },
   attachmentRetentionDays: { kind: 'int', min: 0, max: 36500 },
+  reportTime: { kind: 'string', max: 5 },
+  reportTo: { kind: 'string', max: 320 },
+  reportFromAccountId: { kind: 'string', max: 64 },
+  reportWebhook: { kind: 'bool' },
 }
 
 const ENV_KEYS: Record<keyof Settings, string> = {
@@ -75,6 +83,10 @@ const ENV_KEYS: Record<keyof Settings, string> = {
   idleMaxConnections: 'MM_IDLE_MAX_CONNECTIONS',
   retentionDays: 'MM_RETENTION_DAYS',
   attachmentRetentionDays: 'MM_ATTACHMENT_RETENTION_DAYS',
+  reportTime: 'MM_REPORT_TIME',
+  reportTo: 'MM_REPORT_TO',
+  reportFromAccountId: 'MM_REPORT_FROM_ACCOUNT_ID',
+  reportWebhook: 'MM_REPORT_WEBHOOK',
 }
 
 /**
