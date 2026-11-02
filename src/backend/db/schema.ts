@@ -168,6 +168,18 @@ export interface MailOpItemsTable {
   prev_flagged: number | null;
 }
 
+export interface AuditLogTable {
+  id: string;
+  at: string;
+  actor: string;
+  action: string;
+  target: string | null;
+  /** JSON（秘密値は入れない） */
+  detail: string | null;
+  ok: number;
+  error: string | null;
+}
+
 export interface RuleHitsTable {
   rule_id: string;
   message_id: string;
@@ -234,6 +246,7 @@ export interface Database {
   rule_hits: RuleHitsTable;
   mail_templates: MailTemplatesTable;
   mail_ops: MailOpsTable;
+  audit_log: AuditLogTable;
   mail_op_items: MailOpItemsTable;
   messages_fts: MessagesFtsTable;
 }

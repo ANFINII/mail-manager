@@ -599,6 +599,27 @@ migrations['0021_account_tags_notes'] = {
   },
 }
 
+migrations['0022_audit_log'] = {
+  async up(db: Kysely<unknown>) {
+    // 監査ログ: 重要な操作（認証情報つき書き出し・削除・ルール変更など）を誰がいつ行ったか
+    await db.schema
+      .createTable('audit_log')
+      .addColumn('id', 'text', (c) => c.primaryKey())
+      .addColumn('at', 'text', (c) => c.notNull())
+      .addColumn('actor', 'text', (c) => c.notNull())
+      .addColumn('action', 'text', (c) => c.notNull())
+      .addColumn('target', 'text')
+      .addColumn('detail', 'text')
+      .addColumn('ok', 'integer', (c) => c.notNull().defaultTo(1))
+      .addColumn('error', 'text')
+      .execute()
+    await db.schema.createIndex('idx_audit_log_at').on('audit_log').column('at').execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropTable('audit_log').execute()
+  },
+}
+
 const provider: MigrationProvider = {
   async getMigrations() {
     return migrations

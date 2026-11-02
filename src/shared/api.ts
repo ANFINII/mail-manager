@@ -11,6 +11,8 @@ import type {
   MailOpSummary,
   DailyReport,
   ConnectionMetrics,
+  AuditEntry,
+  AuditQuery,
   UndoResult,
   MailTemplateInput,
   ReceivedCode,
@@ -149,6 +151,13 @@ export interface RpcMethods {
   'report.send': { params: Record<string, never>; result: { email: boolean; webhook: boolean } };
   /** 接続数・失敗・スロットリングの計測（直近 60 分） */
   'metrics.get': { params: Record<string, never>; result: ConnectionMetrics };
+  /** 監査ログ（新しい順） */
+  'audit.list': { params: AuditQuery; result: AuditEntry[] };
+  /** メインプロセスからだけ呼ぶ（ロックの解除など）。画面からの呼び出しはメインプロセスが拒否する */
+  'audit.record': {
+    params: { action: string; target?: string | null; ok?: boolean; error?: string | null };
+    result: void;
+  };
   'templates.list': { params: Record<string, never>; result: MailTemplate[] };
   'templates.save': { params: MailTemplateInput; result: MailTemplate[] };
   'templates.remove': { params: { id: string }; result: MailTemplate[] };

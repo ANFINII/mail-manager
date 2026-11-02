@@ -758,3 +758,23 @@ export interface LockStatus {
   /** パスコードの試行回数超過で待つ残り時間 */
   retryAfterMs: number;
 }
+
+export interface AuditEntry {
+  id: string;
+  at: string;
+  /** 操作した人（OS のユーザー名） */
+  actor: string;
+  /** 操作（RPC メソッド名、または lock.unlock などアプリの操作） */
+  action: string;
+  target: string | null;
+  detail: Record<string, unknown> | null;
+  ok: boolean;
+  error: string | null;
+}
+
+export interface AuditQuery {
+  action?: string;
+  failedOnly?: boolean;
+  text?: string;
+  limit?: number;
+}

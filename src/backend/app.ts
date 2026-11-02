@@ -6,6 +6,7 @@ import type { AppInfo, AutoSyncState, ImportRowEdit, JobInfo, Settings } from '@
 import { AccountGroupService } from './accounts/account-group-service'
 import { AccountService } from './accounts/account-service'
 import { ImportService } from './accounts/import-service'
+import { AuditLog } from './audit/audit-log'
 import { AuthTestService } from './auth/auth-test-service'
 import { CodeService } from './codes/code-service'
 import { SettingsService } from './config/settings-service'
@@ -93,6 +94,7 @@ export class BackendApp {
     readonly templates: TemplateRepository,
     readonly report: ReportService,
     readonly metrics: MetricsService,
+    readonly audit: AuditLog,
     private readonly idleSyncBatch: Batcher<string>,
     private readonly scheduler: AutoSyncScheduler,
     private readonly appInfo: AppInfo,
@@ -421,6 +423,7 @@ export class BackendApp {
       new TemplateRepository(db),
       report,
       metrics,
+      new AuditLog(db, env.MM_AUDIT_ACTOR || undefined),
       idleSyncBatch,
       scheduler,
       info,
@@ -473,6 +476,7 @@ export class BackendApp {
     })
     // 起動時は自動受信しない。自動同期はユーザーが「自動同期」ボタンで ON にしたときに始まる
     //（ON にした時点で認証済みアカウントを一度受信し、以後は設定間隔と認証完了時に受信する）。
+    void app.audit.prune().catch(() => undefined)
     logger.info('Backend ready', { envOverrides: info.envOverrides, keyMode: info.keyMode })
     return app
   }
@@ -636,6 +640,8 @@ export class BackendApp {
       return { report: r, ...this.report.format(r) }
     },
     'report.send': () => this.report.send(),
+    'audit.list': (p) => this.audit.list(p ?? {}),
+    'audit.record': (p) => this.audit.record(p),
     'metrics.get': async () => this.metrics.snapshot(),
     'templates.list': () => this.templates.list(),
     'templates.save': (p) => this.templates.save(p, new Date().toISOString()),
@@ -751,7 +757,16 @@ export class BackendApp {
     const handler = this.handlers[method] as
       ((p: RpcMethods[M]['params']) => Promise<RpcMethods[M]['result']>) | undefined
     if (!handler) throw new Error(`Unknown method: ${String(method)}`)
-    return handler(params)
+    if (!this.audit.shouldRecord(method)) return handler(params)
+    // 重要な操作は成功・失敗とも監査ログに残す（記録の失敗で操作自体は失敗させない）
+    try {
+      const result = await handler(params)
+      await this.audit.recordCall(method, params, result, null).catch(() => undefined)
+      return result
+    } catch (err) {
+      await this.audit.recordCall(method, params, undefined, err).catch(() => undefined)
+      throw err
+    }
   }
 
   async shutdown(): Promise<void> {

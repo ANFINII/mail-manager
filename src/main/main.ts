@@ -39,6 +39,11 @@ if (process.env.MM_USER_DATA) app.setPath('userData', process.env.MM_USER_DATA)
 let host: BackendHost | null = null
 let lock: LockManager | null = null
 
+/** アプリのロック操作を監査ログに残す（バックエンドがまだ起動していなければ捨てる） */
+function auditLock(action: string, ok = true, error: string | null = null): void {
+  void host?.call('audit.record', { action, ok, error })?.catch(() => undefined)
+}
+
 /** ロック中は画面からの操作（RPC・ダイアログ・外部リンク）を受け付けない */
 function assertUnlocked(): void {
   if (lock?.isLocked()) throw new Error('LOCKED: アプリはロックされています')
@@ -102,21 +107,41 @@ app.whenReady().then(async () => {
   powerMonitor.on('lock-screen', () => lock?.lock())
   powerMonitor.on('suspend', () => lock?.lock())
   ipcMain.handle('lock.status', () => lock!.status())
+  const audited = <T>(action: string, fn: () => T): T => {
+    try {
+      const r = fn()
+      auditLock(action)
+      return r
+    } catch (err) {
+      auditLock(action, false, err instanceof Error ? err.message : String(err))
+      throw err
+    }
+  }
   ipcMain.handle('lock.lockNow', () => {
     lock!.lock()
+    auditLock('lock.lock')
     return lock!.status()
   })
-  ipcMain.handle('lock.unlock', (_e, passcode: unknown) => lock!.unlockWithPasscode(String(passcode ?? '')))
+  ipcMain.handle('lock.unlock', (_e, passcode: unknown) =>
+    audited('lock.unlock', () => lock!.unlockWithPasscode(String(passcode ?? ''))),
+  )
   ipcMain.handle('lock.touchId', async () => {
     if (!touchIdAvailable()) throw new Error('Touch ID は使えません')
-    await systemPreferences.promptTouchID('Mail Manager のロックを解除')
-    return lock!.unlockWithOsAuth()
+    try {
+      await systemPreferences.promptTouchID('Mail Manager のロックを解除')
+    } catch (err) {
+      auditLock('lock.touchId', false, err instanceof Error ? err.message : String(err))
+      throw err
+    }
+    return audited('lock.touchId', () => lock!.unlockWithOsAuth())
   })
   ipcMain.handle('lock.setPasscode', (_e, current: unknown, next: unknown) =>
-    lock!.setPasscode(typeof current === 'string' ? current : undefined, String(next ?? '')),
+    audited('lock.setPasscode', () =>
+      lock!.setPasscode(typeof current === 'string' ? current : undefined, String(next ?? '')),
+    ),
   )
   ipcMain.handle('lock.configure', (_e, opts: { enabled: boolean; idleMinutes: number; passcode?: string }) =>
-    lock!.configure(opts),
+    audited('lock.configure', () => lock!.configure(opts)),
   )
 
   host = new BackendHost({
@@ -137,6 +162,8 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('rpc', (_event, method: unknown, params: unknown) => {
     if (typeof method !== 'string') throw new Error('Invalid RPC method')
+    // 監査ログへの書き込みはメインプロセスだけが行う（画面から偽の記録を作らせない）
+    if (method === 'audit.record') throw new Error('Not allowed')
     assertUnlocked()
     return host!.call(method, params)
   })
