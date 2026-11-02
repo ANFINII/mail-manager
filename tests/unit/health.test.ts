@@ -33,6 +33,7 @@ function account(patch: Partial<AccountRow> = {}): AccountRow {
     consecutive_failures: 0,
     tags: '[]',
     note: null,
+    fetch_via: 'imap',
     ...patch,
   };
 }

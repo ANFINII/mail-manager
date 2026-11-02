@@ -58,6 +58,8 @@ export interface AccountSummary {
   tags: string[];
   /** 自由記述のメモ */
   note: string | null;
+  /** メールの取得方法 */
+  fetchVia: FetchVia;
   createdAt: string;
   updatedAt: string;
 }
@@ -622,6 +624,8 @@ export interface OAuthLoginStart {
   accountId?: string;
   /** 新規登録するアカウントのグループ */
   groupId?: string | null;
+  /** Microsoft: Graph API で取得する場合 true（Graph のスコープで同意し、取得方法を Graph にする） */
+  graph?: boolean;
 }
 
 export interface OAuthLoginStatus {
@@ -778,3 +782,6 @@ export interface AuditQuery {
   text?: string;
   limit?: number;
 }
+
+/** メールの取得方法: IMAP / Microsoft Graph API / Gmail API（OAuth2 アカウントのみ API を選べる） */
+export type FetchVia = 'imap' | 'graph' | 'gmail_api';

@@ -24,6 +24,7 @@ export const AUDITED: { [M in RpcMethod]?: Summarizer<M> } = {
   'accounts.updateCredentials': (p) => ({ target: p.id, detail: { authType: p.update.authType ?? null } }),
   'accounts.exportCsvWithCredentials': (p, r) => ({ target: fileName(p.path), detail: { count: r.count, selected: p.accountIds?.length ?? null } }),
   'accounts.exportCsv': (p, r) => ({ target: fileName(p.path), detail: { count: r.count } }),
+  'accounts.setFetchVia': (p, r) => ({ target: p.via, detail: { ...r } }),
   'accounts.setGroup': (p) => ({ detail: { accounts: p.ids.length, groupId: p.groupId } }),
   'groups.create': (p) => ({ target: p.name }),
   'groups.rename': (p) => ({ target: p.name, detail: { id: p.id } }),

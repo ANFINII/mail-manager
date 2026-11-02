@@ -24,6 +24,8 @@ import { Batcher, EventBus, type EventListener } from './events/event-bus'
 import { WebhookNotifier } from './events/webhook'
 import { ExportService } from './export/export-service'
 import { createLogger, Logger, type LogLevel, type LogSink } from './logging/logger'
+import { RoutingProvider } from './mail/api/routing-provider'
+import { UidMapStore } from './mail/api/uid-map'
 import type { EmailProvider } from './mail/email-provider'
 import { GraphSender } from './mail/graph-sender'
 import { ImapFlowProvider } from './mail/imapflow-provider'
@@ -154,7 +156,18 @@ export class BackendApp {
     const groups = new AccountGroupService({ groups: groupRepo, accounts: accountRepo, events, logger })
     // すべての IMAP 接続（同期・IDLE・一括操作・認証テスト）を計測する
     const metrics = new MetricsService()
-    const provider = metrics.wrap(opts.provider ?? new ImapFlowProvider())
+    const provider = metrics.wrap(
+      // 取得方法が Graph / Gmail API のアカウントは HTTP API、それ以外は IMAP で接続する
+      new RoutingProvider(
+        opts.provider ?? new ImapFlowProvider(),
+        new UidMapStore(db),
+        {
+          graph: env.MM_GRAPH_API_URL || 'https://graph.microsoft.com/v1.0',
+          gmail: env.MM_GMAIL_API_URL || 'https://gmail.googleapis.com/gmail/v1',
+        },
+        opts.fetchImpl,
+      ),
+    )
     const auth: SessionAuthDeps = {
       repo: accountRepo,
       cipher,
@@ -316,6 +329,7 @@ export class BackendApp {
           id = (await accountRepo.emailIdMap()).get(r.email) ?? null
           if (!id) throw new Error('登録したアカウントが見つかりません')
         }
+        if (req.graph && r.provider === 'outlook') await accounts.setFetchVia([id], 'graph')
         void authTest.testAccounts([id])
         return id
       },
@@ -585,6 +599,7 @@ export class BackendApp {
     },
     'accounts.setGroup': async (p) => ({ updated: await this.groups.assign(p.ids, p.groupId) }),
     'accounts.updateTags': async (p) => ({ updated: await this.accounts.updateTags(p.ids, p.add, p.remove) }),
+    'accounts.setFetchVia': (p) => this.accounts.setFetchVia(p.ids, p.via),
     'accounts.setNote': (p) => this.accounts.setNote(p.id, p.note),
     'accounts.tags': () => this.accounts.tagCounts(),
     'groups.list': async () => this.groups.list(),

@@ -35,6 +35,15 @@ export interface AccountsTable {
   tags: Generated<string>;
   /** 自由記述のメモ */
   note: string | null;
+  /** 取得方法: imap / graph / gmail_api */
+  fetch_via: Generated<string>;
+}
+
+export interface ApiUidMapTable {
+  account_email: string;
+  mailbox: string;
+  remote_id: string;
+  uid: number;
 }
 
 /** アカウントのグループ（一括操作・絞り込みの単位）。名前は一意。 */
@@ -247,6 +256,7 @@ export interface Database {
   mail_templates: MailTemplatesTable;
   mail_ops: MailOpsTable;
   audit_log: AuditLogTable;
+  api_uid_map: ApiUidMapTable;
   mail_op_items: MailOpItemsTable;
   messages_fts: MessagesFtsTable;
 }

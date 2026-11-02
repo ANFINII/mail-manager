@@ -45,6 +45,7 @@ export default function OAuthLogin({ account, onClose }: Props): React.JSX.Eleme
   const [clientSecret, setClientSecret] = useState('')
   const [email, setEmail] = useState(account?.email ?? '')
   const [groupId, setGroupId] = useState('')
+  const [graph, setGraph] = useState(account?.fetchVia === 'graph')
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -71,6 +72,7 @@ export default function OAuthLogin({ account, onClose }: Props): React.JSX.Eleme
         email: email.trim() || undefined,
         accountId: account?.id,
         groupId: account ? undefined : groupId || null,
+        graph: provider === 'outlook' ? graph : undefined,
       })
       saveClientId(provider, clientId.trim())
       setSessionId(r.sessionId)
@@ -149,6 +151,12 @@ export default function OAuthLogin({ account, onClose }: Props): React.JSX.Eleme
                 </option>
               ))}
             </select>
+          </label>
+        )}
+        {provider === 'outlook' && (
+          <label className="check">
+            <input type="checkbox" checked={graph} onChange={(e) => setGraph(e.target.checked)} disabled={waiting} />
+            {t('oauthLogin.graph')}
           </label>
         )}
         <p className="muted small">{t('oauthLogin.redirectNote')}</p>

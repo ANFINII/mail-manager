@@ -1,5 +1,5 @@
 import type { Provider } from '@shared/types'
-import type { ConnectionTestParams } from './email-provider'
+import { MailError, type ConnectionTestParams } from './email-provider'
 import type { AccountRepository } from '../db/account-repository'
 import type { AccountRow } from '../db/schema'
 import type { Logger } from '../logging/logger'
@@ -38,12 +38,17 @@ export async function buildSessionParams(
     rejectUnauthorized: deps.tlsRejectUnauthorized(),
   }
   if (creds.type === 'password') {
+    if ((account.fetch_via ?? 'imap') !== 'imap')
+      throw new MailError('API での取得には OAuth2 の認証情報が必要です', 'auth')
     return { ...base, auth: { type: 'password', password: creds.password } }
   }
+  const via = account.fetch_via ?? 'imap'
+  // Graph で取得する場合は Mail.ReadWrite のトークン、Gmail API は IMAP と同じスコープ（https://mail.google.com/）
   const token = await deps.oauth.getAccessToken(
     { id: account.id, email: account.email, provider: account.provider as Provider },
     creds,
     signal,
+    via === 'graph' ? 'graph_read' : 'imap',
   )
   if (token.rotatedRefreshToken) {
     const rotated = { ...creds, refreshToken: token.rotatedRefreshToken }
@@ -54,5 +59,12 @@ export async function buildSessionParams(
     )
     deps.logger.debug('Refresh token rotated', { accountId: account.id })
   }
+  if (via === 'graph' || via === 'gmail_api')
+    return {
+      ...base,
+      host: via === 'graph' ? 'graph.microsoft.com' : 'gmail.googleapis.com',
+      auth: { type: 'oauth2', accessToken: token.accessToken },
+      api: { kind: via === 'graph' ? 'graph' : 'gmail', accessToken: token.accessToken },
+    }
   return { ...base, auth: { type: 'oauth2', accessToken: token.accessToken } }
 }

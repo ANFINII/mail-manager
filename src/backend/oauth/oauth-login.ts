@@ -108,7 +108,7 @@ export class OAuthLoginService {
     url.searchParams.set('client_id', clientId)
     url.searchParams.set('response_type', 'code')
     url.searchParams.set('redirect_uri', redirectUri)
-    url.searchParams.set('scope', preset.loginScope)
+    url.searchParams.set('scope', req.graph && preset.graphLoginScope ? preset.graphLoginScope : preset.loginScope)
     url.searchParams.set('state', state)
     url.searchParams.set('code_challenge', challenge)
     url.searchParams.set('code_challenge_method', 'S256')

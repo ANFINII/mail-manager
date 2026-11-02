@@ -568,6 +568,7 @@ export const ja = {
     vacuumed: 'データベースを最適化しました（{{before}} → {{after}}）',
   },
   oauthLogin: {
+    graph: 'Graph API で取得する（Mail.ReadWrite に同意）',
     title: 'ブラウザでサインインして追加',
     reauthTitle: '{{email}} にブラウザで再サインイン',
     open: 'ブラウザでサインインして追加',
@@ -747,6 +748,13 @@ export const ja = {
       lock_setPasscode: 'パスコード設定',
       lock_configure: 'ロック設定変更',
     },
+  },
+  fetchVia: {
+    label: '取得方法',
+    changed: '取得方法を変更しました。次回の同期で取り込み直します',
+    unchanged: '取得方法は変わりませんでした',
+    hintGraph: 'Graph は Mail.ReadWrite の同意が必要です（「ブラウザで再サインイン」で「Graph API で取得」を選ぶ）。プッシュ受信（IDLE）は使えず定期同期になります。',
+    hintGmail: 'Gmail API は IMAP と同じ同意（https://mail.google.com/）で使えます。プッシュ受信（IDLE）は使えず定期同期になります。',
   },
   autoSync: {
     on: '自動同期: ON',

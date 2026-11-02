@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'hooks/router'
 import { useAppStore } from 'stores/app-store'
-import type { AccountDetail, MailboxSummary } from '@shared/types'
+import type {
+  FetchVia, AccountDetail, MailboxSummary } from '@shared/types'
 import { api, errorMessage } from 'lib/api'
 import { formatDateTime } from 'utils/format'
 import AuthBadge from 'components/parts/AuthBadge'
@@ -225,6 +226,25 @@ export default function AccountDetailTemplate() {
             if (saved) setDetailTick((n) => n + 1)
           }}
         />
+      )}
+      {a.authType === 'oauth2' && (a.provider === 'outlook' || a.provider === 'gmail') && (
+        <div className="field-inline fetch-via" data-testid="fetch-via">
+          {t('fetchVia.label')}
+          <select
+            value={a.fetchVia}
+            onChange={(e) =>
+              act(async () => {
+                const r = await api.call('accounts.setFetchVia', { ids: [a.id], via: e.target.value as FetchVia })
+                return r.updated ? t('fetchVia.changed') : t('fetchVia.unchanged')
+              })
+            }
+          >
+            <option value="imap">IMAP</option>
+            {a.provider === 'outlook' && <option value="graph">Microsoft Graph API</option>}
+            {a.provider === 'gmail' && <option value="gmail_api">Gmail API</option>}
+          </select>
+          <span className="muted small">{t(a.provider === 'outlook' ? 'fetchVia.hintGraph' : 'fetchVia.hintGmail')}</span>
+        </div>
       )}
       <TagsNoteEditor account={a} />
       <h2>{t('detail.mailboxes')}</h2>

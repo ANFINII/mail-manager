@@ -1,4 +1,5 @@
 import type {
+  FetchVia,
   AccountCredentialsUpdate,
   AccountDetail,
   AccountListQuery,
@@ -68,6 +69,7 @@ export function toSummary(row: AccountRow): AccountSummary {
     consecutiveFailures: Number(row.consecutive_failures ?? 0),
     tags: parseTags(row.tags),
     note: row.note ?? null,
+    fetchVia: (row.fetch_via ?? 'imap') as FetchVia,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -180,6 +182,34 @@ export class AccountService {
     const summary = toSummary({ ...row, note: value })
     this.deps.events.emit({ type: 'accounts.updated', accounts: [summary] })
     return summary
+  }
+
+  /**
+   * 取得方法を切り替える。Graph は Outlook、Gmail API は Gmail の OAuth2 アカウントだけ（それ以外はスキップ）。
+   * UID の振り方が変わるので、フォルダの UIDVALIDITY を無効にして次回の同期で取り込み直させる。
+   */
+  async setFetchVia(ids: string[], via: FetchVia): Promise<{ updated: number; skipped: number }> {
+    const rows = await this.deps.repo.getByIds([...new Set(ids)])
+    const now = (this.deps.now ?? (() => new Date().toISOString()))()
+    const changed: AccountRow[] = []
+    let skipped = 0
+    for (const row of rows) {
+      const ok =
+        via === 'imap' ||
+        (row.auth_type === 'oauth2' &&
+          ((via === 'graph' && row.provider === 'outlook') || (via === 'gmail_api' && row.provider === 'gmail')))
+      if (!ok) {
+        skipped++
+        continue
+      }
+      if ((row.fetch_via ?? 'imap') === via) continue
+      await this.deps.repo.setFetchVia(row.id, row.email, via, now)
+      for (const key of [row.id, `graph_read:${row.id}`]) this.deps.oauth.cache.delete(key)
+      changed.push({ ...row, fetch_via: via, status: row.enabled === 1 ? 'untested' : 'disabled' })
+    }
+    if (changed.length) this.deps.events.emit({ type: 'accounts.updated', accounts: changed.map(toSummary) })
+    this.deps.logger.info('Fetch method changed', { via, updated: changed.length, skipped })
+    return { updated: changed.length, skipped }
   }
 
   /** 使われているタグと件数（名前順） */

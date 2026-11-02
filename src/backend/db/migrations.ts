@@ -620,6 +620,34 @@ migrations['0022_audit_log'] = {
   },
 }
 
+migrations['0023_api_fetch'] = {
+  async up(db: Kysely<unknown>) {
+    // 取得方法: imap（既定）/ graph（Microsoft Graph）/ gmail_api（Gmail API）
+    await db.schema
+      .alterTable('accounts')
+      .addColumn('fetch_via', 'text', (c) => c.notNull().defaultTo('imap'))
+      .execute()
+    // API のメッセージ ID ↔ 同期処理で使う連番 UID（アカウントのメールアドレス・フォルダごと）
+    await db.schema
+      .createTable('api_uid_map')
+      .addColumn('account_email', 'text', (c) => c.notNull())
+      .addColumn('mailbox', 'text', (c) => c.notNull())
+      .addColumn('remote_id', 'text', (c) => c.notNull())
+      .addColumn('uid', 'integer', (c) => c.notNull())
+      .addPrimaryKeyConstraint('pk_api_uid_map', ['account_email', 'mailbox', 'remote_id'])
+      .execute()
+    await db.schema
+      .createIndex('idx_api_uid_map_uid')
+      .on('api_uid_map')
+      .columns(['account_email', 'mailbox', 'uid'])
+      .execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropTable('api_uid_map').execute()
+    await db.schema.alterTable('accounts').dropColumn('fetch_via').execute()
+  },
+}
+
 const provider: MigrationProvider = {
   async getMigrations() {
     return migrations

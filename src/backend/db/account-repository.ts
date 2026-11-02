@@ -206,6 +206,20 @@ export class AccountRepository {
       .execute()
   }
 
+  /** 取得方法を変え、そのアカウントのフォルダを「取り込み直し」状態にする */
+  async setFetchVia(id: string, email: string, via: string, now: string): Promise<void> {
+    await this.db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('accounts')
+        .set({ fetch_via: via, status: sql`case when enabled = 1 then 'untested' else 'disabled' end`, updated_at: now })
+        .where('id', '=', id)
+        .execute()
+      // UIDVALIDITY を -1 にすると、次回の同期で UID の不一致として全件取り込み直す
+      await trx.updateTable('mailboxes').set({ uid_validity: -1, highest_modseq: null }).where('account_id', '=', id).execute()
+      await trx.deleteFrom('api_uid_map').where('account_email', '=', email.toLowerCase()).execute()
+    })
+  }
+
   async countAll(): Promise<number> {
     const r = await this.db
       .selectFrom('accounts')

@@ -572,6 +572,7 @@ export const en: Translation = {
     vacuumed: 'Database compacted ({{before}} → {{after}})',
   },
   oauthLogin: {
+    graph: 'Fetch via Graph API (consent to Mail.ReadWrite)',
     title: 'Sign in with a browser',
     reauthTitle: 'Sign in again as {{email}}',
     open: 'Sign in with a browser',
@@ -751,6 +752,13 @@ export const en: Translation = {
       lock_setPasscode: 'Set passcode',
       lock_configure: 'Change lock settings',
     },
+  },
+  fetchVia: {
+    label: 'Fetch via',
+    changed: 'Fetch method changed. Mail will be re-imported on the next sync',
+    unchanged: 'Fetch method unchanged',
+    hintGraph: 'Graph needs Mail.ReadWrite consent ("Sign in again in browser" with "Fetch via Graph API"). Push (IDLE) is not available; periodic sync is used.',
+    hintGmail: 'The Gmail API uses the same consent as IMAP (https://mail.google.com/). Push (IDLE) is not available; periodic sync is used.',
   },
   autoSync: {
     on: 'Auto sync: ON',

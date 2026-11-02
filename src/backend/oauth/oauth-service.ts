@@ -30,7 +30,7 @@ export class OAuthService {
     account: { id: string; email: string; provider: Provider },
     creds: OAuthCredentials,
     signal?: AbortSignal,
-    purpose: 'imap' | 'smtp' | 'graph' = 'imap',
+    purpose: 'imap' | 'smtp' | 'graph' | 'graph_read' = 'imap',
   ): Promise<AccessTokenResult> {
     const cacheKey = purpose === 'imap' ? account.id : `${purpose}:${account.id}`
     const cached = this.cache.get(cacheKey)
@@ -51,7 +51,9 @@ export class OAuthService {
       clientSecret: creds.clientSecret,
       refreshToken: creds.refreshToken,
       scope:
-        purpose === 'graph'
+        purpose === 'graph_read'
+          ? (oauth.graphReadScope ?? oauth.scope)
+          : purpose === 'graph'
           ? (oauth.graphScope ?? oauth.scope)
           : purpose === 'smtp'
             ? oauth.smtpScope

@@ -6,6 +6,8 @@ export interface OAuthPreset {
   authorizeUrl: string;
   /** 対話ログインで要求するスコープ（refresh token とメールアドレスの取得用を含む） */
   loginScope: string;
+  /** 対話ログインで Graph 用（取得方法 = Graph）に要求するスコープ。Microsoft は IMAP と Graph を 1 回の同意で混ぜられない */
+  graphLoginScope?: string;
   /** 認可エンドポイントに付ける追加パラメータ */
   authorizeParams?: Record<string, string>;
   scope: string;
@@ -13,6 +15,8 @@ export interface OAuthPreset {
   smtpScope: string;
   /** Graph API 送信用のスコープ（Microsoft のみ） */
   graphScope?: string;
+  /** Graph API でメールを読み書きするスコープ（Microsoft のみ。取得方法 = Graph 用） */
+  graphReadScope?: string;
   /** Graph API の sendMail エンドポイント（Microsoft のみ） */
   graphSendUrl?: string;
   /** Google は client_secret が必須、Microsoft の公開クライアントは不要 */
@@ -50,10 +54,13 @@ const DEFAULTS: Record<Provider, ProviderPreset> = {
       authorizeUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
       loginScope:
         'https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send offline_access openid email',
+      graphLoginScope:
+        'https://graph.microsoft.com/Mail.ReadWrite https://graph.microsoft.com/Mail.Send offline_access openid email',
       authorizeParams: { prompt: 'select_account' },
       scope: 'https://outlook.office.com/IMAP.AccessAsUser.All offline_access',
       smtpScope: 'https://outlook.office.com/SMTP.Send offline_access',
       graphScope: 'https://graph.microsoft.com/Mail.Send offline_access',
+      graphReadScope: 'https://graph.microsoft.com/Mail.ReadWrite offline_access',
       graphSendUrl: 'https://graph.microsoft.com/v1.0/me/sendMail',
       clientSecretRequired: false,
     },

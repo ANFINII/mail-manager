@@ -12,6 +12,7 @@ import type {
   DailyReport,
   ConnectionMetrics,
   AuditEntry,
+  FetchVia,
   AuditQuery,
   UndoResult,
   MailTemplateInput,
@@ -84,6 +85,8 @@ export interface RpcMethods {
     params: { ids: string[]; add?: string[]; remove?: string[] };
     result: { updated: number };
   };
+  /** 取得方法（IMAP / Graph / Gmail API）を切り替える。切り替えたアカウントは次回の同期で取り込み直す */
+  'accounts.setFetchVia': { params: { ids: string[]; via: FetchVia }; result: { updated: number; skipped: number } };
   'accounts.setNote': { params: { id: string; note: string }; result: AccountSummary };
   'accounts.tags': { params: Record<string, never>; result: Array<{ tag: string; count: number }> };
   'groups.list': { params: Record<string, never>; result: AccountGroupInfo[] };

@@ -964,3 +964,11 @@ code {
 .lock-icon {
   font-size: 32px;
 }
+
+.fetch-via {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}

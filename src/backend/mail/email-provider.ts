@@ -10,6 +10,8 @@ export interface ConnectionTestParams {
   proxy?: string | null;
   timeoutMs: number;
   rejectUnauthorized: boolean;
+  /** IMAP の代わりに HTTP API で取得する（Microsoft Graph / Gmail API）。指定時 host は API のホスト */
+  api?: { kind: 'graph' | 'gmail'; accessToken: string };
 }
 
 /**
