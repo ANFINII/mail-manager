@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { BackendEvent, RendererApi } from '@shared/api'
+import type { LockStatus } from '@shared/types'
 
 const api: RendererApi = {
   call: (method, params) => ipcRenderer.invoke('rpc', method, params),
@@ -14,6 +15,19 @@ const api: RendererApi = {
   showItemInFolder: (p) => ipcRenderer.invoke('shell.showItemInFolder', p),
   openPath: (p) => ipcRenderer.invoke('shell.openPath', p),
   openExternal: (url) => ipcRenderer.invoke('shell.openExternal', url),
+  lock: {
+    status: () => ipcRenderer.invoke('lock.status'),
+    lockNow: () => ipcRenderer.invoke('lock.lockNow'),
+    unlock: (passcode) => ipcRenderer.invoke('lock.unlock', passcode),
+    touchId: () => ipcRenderer.invoke('lock.touchId'),
+    setPasscode: (current, next) => ipcRenderer.invoke('lock.setPasscode', current, next),
+    configure: (opts) => ipcRenderer.invoke('lock.configure', opts),
+    onChange: (listener) => {
+      const wrapped = (_e: IpcRendererEvent, status: LockStatus) => listener(status)
+      ipcRenderer.on('lock-changed', wrapped)
+      return () => ipcRenderer.removeListener('lock-changed', wrapped)
+    },
+  },
 }
 
 contextBridge.exposeInMainWorld('api', api)

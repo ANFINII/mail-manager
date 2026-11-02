@@ -1,8 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet } from '@tanstack/react-router'
 import { useAppStore } from 'stores/app-store'
+import type { LockStatus } from '@shared/types'
 import { api } from 'lib/api'
+import LockScreen from 'components/layout/LockScreen'
 import Toasts from 'components/layout/Toasts'
 
 export default function AppLayout(): React.JSX.Element {
@@ -11,6 +13,18 @@ export default function AppLayout(): React.JSX.Element {
   const applyEvent = useAppStore((s) => s.applyEvent)
   const loaded = useAppStore((s) => s.loaded)
   const needsAttention = useAppStore((s) => s.stats?.needsAttention ?? 0)
+  const [lockStatus, setLockStatus] = useState<LockStatus | null>(null)
+
+  // ロック状態はメインプロセスが持つ。解除されたら全体を読み直す（ロック中はイベントが届かないため）
+  useEffect(() => {
+    void api.lock.status().then(setLockStatus)
+    return api.lock.onChange((s) => {
+      setLockStatus((prev) => {
+        if (prev?.locked && !s.locked) void loadAll()
+        return s
+      })
+    })
+  }, [loadAll])
 
   useEffect(() => {
     const off = api.onEvent(applyEvent)
@@ -24,6 +38,8 @@ export default function AppLayout(): React.JSX.Element {
       clearTimeout(retry)
     }
   }, [applyEvent, loadAll])
+
+  if (lockStatus?.locked) return <LockScreen status={lockStatus} />
 
   return (
     <div className="app" data-testid="app-root" data-backend={loaded ? 'ready' : 'connecting'}>

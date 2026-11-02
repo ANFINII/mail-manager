@@ -934,3 +934,33 @@ code {
 .mini-chart-bar:hover path {
   opacity: 0.8;
 }
+
+/* ロック画面 */
+.lock-screen {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--nav-bg);
+}
+.lock-box {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-width: 320px;
+}
+.lock-box h1 {
+  font-size: 16px;
+  margin: 0;
+}
+.lock-box form {
+  display: flex;
+  gap: 8px;
+}
+.lock-icon {
+  font-size: 32px;
+}

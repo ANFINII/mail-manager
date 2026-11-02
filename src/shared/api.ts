@@ -5,6 +5,7 @@ import type {
   AccountHealth,
   ForwardFailureListResult,
   IdleStatus,
+  LockStatus,
   CodeListQuery,
   MailTemplate,
   MailOpSummary,
@@ -238,6 +239,16 @@ export interface RendererApi {
   openPath(path: string): Promise<void>;
   /** https の URL を既定のブラウザで開く（OAuth ログイン用） */
   openExternal(url: string): Promise<void>;
+  /** アプリのロック（メインプロセスが管理。ロック中は call が LOCKED で失敗する） */
+  lock: {
+    status(): Promise<LockStatus>;
+    lockNow(): Promise<LockStatus>;
+    unlock(passcode: string): Promise<LockStatus>;
+    touchId(): Promise<LockStatus>;
+    setPasscode(current: string | undefined, next: string): Promise<LockStatus>;
+    configure(opts: { enabled: boolean; idleMinutes: number; passcode?: string }): Promise<LockStatus>;
+    onChange(listener: (status: LockStatus) => void): () => void;
+  };
 }
 
 declare global {

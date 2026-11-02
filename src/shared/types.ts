@@ -745,3 +745,16 @@ export interface ConnectionMetrics {
   /** 直近のスロットリング・エラー（新しい順、最大 100 件） */
   events: Array<{ at: string; kind: MetricsEventKind; host: string; account: string; message: string }>;
 }
+
+/** アプリのロックの状態 */
+export interface LockStatus {
+  enabled: boolean;
+  hasPasscode: boolean;
+  /** この時間（分）OS の操作が無ければロックする */
+  idleMinutes: number;
+  locked: boolean;
+  /** Touch ID で解除できるか（macOS） */
+  touchId: boolean;
+  /** パスコードの試行回数超過で待つ残り時間 */
+  retryAfterMs: number;
+}

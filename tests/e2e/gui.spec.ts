@@ -487,3 +487,49 @@ test('never writes plaintext secrets to the database or log', async () => {
   expect(dbBytes).not.toContain('-secret');
   expect(log).not.toContain('-secret');
 });
+
+test('new pages render: codes, history, health, connections (screenshots)', async () => {
+  for (const [hash, id, shot] of [
+    ['#/codes', 'codes', 'codes.png'],
+    ['#/history', 'history', 'history.png'],
+    ['#/health', 'health', 'health.png'],
+    ['#/connections', 'connections', 'connections.png'],
+  ] as const) {
+    await page.evaluate((h) => {
+      window.location.hash = h;
+    }, hash);
+    await expect(page.getByTestId(id)).toBeVisible();
+    await page.screenshot({ path: path.join(SHOTS, shot) });
+  }
+  // 接続状況のグラフには同期・認証で張った接続が出ている
+  await expect(page.getByTestId('chart-connects')).toBeVisible();
+  await expect(page.getByTestId('hosts')).toContainText('127.0.0.1');
+});
+
+test('app lock: set a passcode, lock, block the backend, and unlock', async () => {
+  await page.evaluate(() => {
+    window.location.hash = '#/settings';
+  });
+  const panel = page.getByTestId('lock-panel');
+  await panel.getByTestId('lock-next').fill('2468');
+  await panel.getByRole('button', { name: /パスコードを設定|Set passcode/ }).click();
+  await panel.getByRole('checkbox').check();
+  await panel.getByTestId('lock-current').fill('2468');
+  await panel.getByRole('button', { name: /^保存$|^Save$/ }).click();
+  await panel.getByRole('button', { name: /今すぐロック|Lock now/ }).click();
+  await expect(page.getByTestId('lock-screen')).toBeVisible();
+  // ロック中はメインプロセスが RPC を拒否する
+  const err = await page.evaluate(() => window.api.call('accounts.list', {}).then(() => 'ok', (e) => String(e)));
+  expect(err).toContain('LOCKED');
+  await page.getByTestId('lock-passcode').fill('0000');
+  await page.getByTestId('lock-passcode').press('Enter');
+  await expect(page.getByTestId('lock-screen')).toContainText(/違います|wrong/i);
+  await page.getByTestId('lock-passcode').fill('2468');
+  await page.getByTestId('lock-passcode').press('Enter');
+  await expect(page.getByTestId('lock-screen')).toBeHidden();
+  await expect(page.getByTestId('settings')).toBeVisible();
+  // 後片付け: ロックを無効にする
+  await panel.getByRole('checkbox').uncheck();
+  await panel.getByTestId('lock-current').fill('2468');
+  await panel.getByRole('button', { name: /^保存$|^Save$/ }).click();
+});
