@@ -16,7 +16,7 @@ import { ForwardTargetRepository } from './db/forward-target-repository'
 import { MailboxRepository } from './db/mailbox-repository'
 import { MessageRepository } from './db/message-repository'
 import { SettingsRepository } from './db/settings-repository'
-import { EventBus, type EventListener } from './events/event-bus'
+import { Batcher, EventBus, type EventListener } from './events/event-bus'
 import { WebhookNotifier } from './events/webhook'
 import { ExportService } from './export/export-service'
 import { createLogger, Logger, type LogLevel, type LogSink } from './logging/logger'
@@ -32,6 +32,7 @@ import { SearchService } from './search/search-service'
 import { CredentialCipher } from './security/credential-cipher'
 import { HealthService } from './stats/health-service'
 import { StatsService } from './stats/stats-service'
+import { IdleManager } from './sync/idle-manager'
 import { toMailboxSummary } from './sync/mailbox-summary'
 import { AutoSyncScheduler } from './sync/scheduler'
 import { SyncService } from './sync/sync-service'
@@ -76,6 +77,8 @@ export class BackendApp {
     readonly groups: AccountGroupService,
     readonly forwardRuleRepo: ForwardRuleRepository,
     readonly health: HealthService,
+    readonly idle: IdleManager,
+    private readonly idleSyncBatch: Batcher<string>,
     private readonly scheduler: AutoSyncScheduler,
     private readonly appInfo: AppInfo,
   ) {}
@@ -227,11 +230,27 @@ export class BackendApp {
     const effectiveIntervalSec = (s: Settings): number =>
       s.autoSyncIntervalSec > 0 ? s.autoSyncIntervalSec : s.autoSyncIntervalMin * 60
     scheduler.configure(effectiveIntervalSec(settings.get()))
+    // IDLE で新着を検知したアカウントは、少しまとめてから（同時に届いた複数アカウント分を 1 ジョブに）同期する
+    const idleSyncBatch = new Batcher<string>(async (ids) => {
+      await sync.syncAccounts(ids)
+    }, 500)
+    const idle = new IdleManager({
+      repo: accountRepo,
+      provider,
+      auth,
+      logger,
+      settings: () => settings.get(),
+      isEnabled: () => scheduler.isEnabled,
+      onNewMail: (accountId) => idleSyncBatch.push(accountId),
+      renewMs: Number(env.MM_IDLE_RENEW_MS) || undefined,
+      minBackoffMs: Number(env.MM_IDLE_BACKOFF_MS) || undefined,
+    })
     settings.onChange((s: Settings) => {
       authTest.setConcurrency(s.authConcurrency)
       sync.setConcurrency(s.syncConcurrency)
       messages.setConcurrency(s.syncConcurrency)
       scheduler.configure(effectiveIntervalSec(s))
+      void idle.refresh()
     })
 
     const info: AppInfo = {
@@ -269,11 +288,31 @@ export class BackendApp {
       groups,
       forwardRuleRepo,
       health,
+      idle,
+      idleSyncBatch,
       scheduler,
       info,
     )
 
+    // 認証状態・グループ・アカウントの増減で IDLE の対象が変わる（頻繁に来るのでまとめる）
+    let idleRefreshTimer: NodeJS.Timeout | null = null
+    const scheduleIdleRefresh = () => {
+      if (idleRefreshTimer) return
+      idleRefreshTimer = setTimeout(() => {
+        idleRefreshTimer = null
+        void idle.refresh()
+      }, 2000)
+      idleRefreshTimer.unref?.()
+    }
     events.on((ev) => {
+      if (
+        settings.get().idleGroupId &&
+        (ev.type === 'accounts.removed' ||
+          ev.type === 'accounts.imported' ||
+          ev.type === 'groups.changed' ||
+          (ev.type === 'job.updated' && ev.job.type === 'auth_test' && ev.job.status !== 'running'))
+      )
+        scheduleIdleRefresh()
       if (
         ev.type === 'accounts.updated' ||
         ev.type === 'accounts.removed' ||
@@ -346,6 +385,9 @@ export class BackendApp {
         intervalSec: this.scheduler.interval,
       })
       this.events.emit({ type: 'autoSync.changed', state: this.autoSyncState() })
+      // OFF のときは IDLE 接続を閉じ終えてから返す（ON の接続開始は待たない）
+      if (enabled) void this.idle.refresh()
+      else await this.idle.refresh()
       if (enabled && !this.sync.isRunning())
         void this.sync.syncAccounts('authenticated').catch(() => undefined)
     }
@@ -422,6 +464,7 @@ export class BackendApp {
     'sync.run': (p) => this.sync.syncAccounts(p.ids, { full: p.full }),
     'autoSync.get': async () => this.autoSyncState(),
     'autoSync.set': (p) => this.setAutoSync(p.enabled),
+    'idle.status': async () => this.idle.status(),
     'mailboxes.list': async (p) => {
       const rows = await this.mailboxRepo.listByAccount(p.accountId)
       const counts = await this.mailboxRepo.storedCounts(p.accountId)
@@ -555,6 +598,8 @@ export class BackendApp {
 
   async shutdown(): Promise<void> {
     this.scheduler.stop()
+    await this.idle.stop()
+    this.idleSyncBatch.dispose()
     this.authTest.dispose()
     this.sync.dispose()
     this.messages.dispose()

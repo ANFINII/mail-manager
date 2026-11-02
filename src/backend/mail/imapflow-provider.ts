@@ -234,6 +234,38 @@ class ImapFlowSession implements MailSession {
     return r && typeof r === 'object' && 'uid' in r ? (r.uid ?? null) : null
   }
 
+  async waitForNewMail(
+    maxMs: number,
+    signal: AbortSignal,
+  ): Promise<'new' | 'timeout' | 'unsupported'> {
+    this.check()
+    if (!this.client.capabilities.has('IDLE')) return 'unsupported'
+    const startCount = this.client.mailbox ? this.client.mailbox.exists : 0
+    return await new Promise<'new' | 'timeout' | 'unsupported'>((resolve, reject) => {
+      let done = false
+      const finish = (fn: () => void) => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        this.client.off('exists', onExists)
+        this.client.off('close', onClose)
+        signal.removeEventListener('abort', onAbort)
+        fn()
+      }
+      const onExists = (ev: { count: number }) => {
+        if (ev.count > startCount) finish(() => resolve('new'))
+      }
+      const onClose = () => finish(() => reject(new Error('IMAP connection closed during IDLE')))
+      const onAbort = () => finish(() => reject(new AbortError()))
+      const timer = setTimeout(() => finish(() => resolve('timeout')), maxMs)
+      this.client.on('exists', onExists)
+      this.client.on('close', onClose)
+      signal.addEventListener('abort', onAbort, { once: true })
+      // idle() は次のコマンドが発行される（close / logout など）まで続く
+      this.client.idle().catch((err) => finish(() => reject(err)))
+    })
+  }
+
   async close(): Promise<void> {
     this.cleanup()
     const closed = new Promise<void>((resolve) => this.client.once('close', () => resolve()))

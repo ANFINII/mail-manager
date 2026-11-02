@@ -4,6 +4,7 @@ import type {
   AccountGroupInfo,
   AccountHealth,
   ForwardFailureListResult,
+  IdleStatus,
   AccountListQuery,
   AccountSummary,
   AppInfo,
@@ -84,6 +85,8 @@ export interface RpcMethods {
   };
   'autoSync.get': { params: Record<string, never>; result: AutoSyncState };
   'autoSync.set': { params: { enabled: boolean }; result: AutoSyncState };
+  /** IMAP IDLE（プッシュ受信）の接続状況 */
+  'idle.status': { params: Record<string, never>; result: IdleStatus };
   'mailboxes.list': { params: { accountId: string }; result: MailboxSummary[] };
   'mailboxes.paths': { params: Record<string, never>; result: string[] };
   'search.query': { params: SearchQuery; result: SearchResult };

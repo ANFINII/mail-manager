@@ -67,5 +67,11 @@ export interface MailSession {
   deleteMessages(uids: number[]): Promise<void>;
   /** Sent などのフォルダに raw メッセージを保存する。UID を返す（UIDPLUS 対応時） */
   append(path: string, raw: Buffer, flags: string[]): Promise<number | null>;
+  /**
+   * 開いているフォルダで IMAP IDLE し、新着（EXISTS の増加）を待つ。
+   * 新着で 'new'、maxMs 経過で 'timeout' を返す。サーバーが IDLE 非対応なら 'unsupported'。
+   * 接続が切れたら例外。signal で中断できる。
+   */
+  waitForNewMail(maxMs: number, signal: AbortSignal): Promise<'new' | 'timeout' | 'unsupported'>;
   close(): Promise<void>;
 }

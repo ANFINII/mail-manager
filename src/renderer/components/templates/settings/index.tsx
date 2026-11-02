@@ -12,6 +12,7 @@ export default function SettingsTemplate() {
   const info = useAppStore((s) => s.info)
   const notify = useAppStore((s) => s.notify)
   const refreshSettings = useAppStore((s) => s.refreshSettings)
+  const groups = useAppStore((s) => s.groups)
   const [form, setForm] = useState<Settings | null>(settings)
   const [lang, setLang] = useState<Language>(currentLanguage())
   const [targets, setTargets] = useState<ForwardTarget[]>([])
@@ -248,6 +249,33 @@ export default function SettingsTemplate() {
           />
           {t('settings.storeAttachments')}
         </label>
+        <label>
+          {t('settings.idleTarget')}
+          <select
+            value={form.idleGroupId}
+            onChange={(e) => setForm({ ...form, idleGroupId: e.target.value })}
+            data-testid="settings-idle-target"
+          >
+            <option value="">{t('settings.idleOff')}</option>
+            <option value="*">{t('settings.idleAll')}</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {t('settings.idleGroup', { name: g.name, count: g.accountCount })}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {t('settings.idleMaxConnections')}
+          <input
+            type="number"
+            min={1}
+            max={1000}
+            value={form.idleMaxConnections}
+            onChange={num('idleMaxConnections')}
+          />
+        </label>
+        <p className="muted small">{t('settings.idleNote')}</p>
         <label className="check">
           <input
             type="checkbox"

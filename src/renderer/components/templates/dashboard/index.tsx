@@ -1,7 +1,8 @@
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'hooks/router'
 import { useAppStore } from 'stores/app-store'
-import type { AccountFilter } from '@shared/types'
+import type { AccountFilter, IdleStatus } from '@shared/types'
 import { api, errorMessage } from 'lib/api'
 import { formatDateTime } from 'utils/format'
 import AutoSyncToggle from 'components/widgets/AutoSyncToggle'
@@ -23,6 +24,23 @@ export default function DashboardTemplate() {
   const accounts = useAppStore((s) => s.accounts)
   const syncProgress = useAppStore((s) => s.syncProgress)
   const locale = i18n.language === 'en' ? 'en-US' : 'ja-JP'
+  const autoSync = useAppStore((s) => s.autoSync)
+  const [idle, setIdle] = useState<IdleStatus | null>(null)
+  // IDLE の接続状況は数秒ごとに読み直す（接続・再接続はバックエンドで随時変わる）
+  useEffect(() => {
+    let alive = true
+    const load = () =>
+      api
+        .call('idle.status', {})
+        .then((s) => alive && setIdle(s))
+        .catch(() => undefined)
+    void load()
+    const timer = setInterval(load, 5000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [autoSync?.enabled])
 
   const tiles: Tile[] = stats
     ? [
@@ -103,6 +121,17 @@ export default function DashboardTemplate() {
         {t('dashboard.lastSync')}:{' '}
         <span data-testid="last-sync">{formatDateTime(stats?.lastSyncAt, locale)}</span>
       </div>
+      {idle && idle.target !== '' && (
+        <div className="muted" data-testid="idle-status">
+          {autoSync?.enabled
+            ? t('dashboard.idleStatus', {
+                connected: idle.connected,
+                watching: idle.watching,
+                unsupported: idle.unsupported,
+              })
+            : t('dashboard.idlePaused')}
+        </div>
+      )}
       <div className="toolbar">
         <AutoSyncToggle />
         <button

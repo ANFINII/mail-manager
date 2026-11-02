@@ -264,6 +264,26 @@ export interface Settings {
   healthStaleHours: number;
   /** 同期時に、取得済みメールのサーバー側の既読・スター変更と削除を取り込む */
   syncFlagChanges: boolean;
+  /**
+   * IMAP IDLE（プッシュ受信）の対象: '' = 使わない / '*' = 認証済みすべて / グループ ID。
+   * 自動同期が ON のときだけ接続する。対象外は定期同期で受信する。
+   */
+  idleGroupId: string;
+  /** IDLE で同時に張る接続数の上限（サーバーの同時接続制限に合わせる） */
+  idleMaxConnections: number;
+}
+
+export interface IdleStatus {
+  /** 設定 idleGroupId の値 */
+  target: string;
+  /** 監視対象のアカウント数 */
+  watching: number;
+  /** IDLE 接続中のアカウント数 */
+  connected: number;
+  /** サーバーが IDLE 非対応のため定期同期に任せているアカウント数 */
+  unsupported: number;
+  /** 再接続待ち（エラー）のアカウント数 */
+  errors: number;
 }
 
 export interface AppInfo {

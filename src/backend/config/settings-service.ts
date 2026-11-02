@@ -19,6 +19,8 @@ export const DEFAULT_SETTINGS: Settings = {
   storeAttachments: true,
   healthStaleHours: 24,
   syncFlagChanges: true,
+  idleGroupId: '',
+  idleMaxConnections: 50,
 }
 
 type Spec =
@@ -44,6 +46,8 @@ const SPECS: Record<keyof Settings, Spec> = {
   storeAttachments: { kind: 'bool' },
   healthStaleHours: { kind: 'int', min: 0, max: 24 * 365 },
   syncFlagChanges: { kind: 'bool' },
+  idleGroupId: { kind: 'string', max: 64 },
+  idleMaxConnections: { kind: 'int', min: 1, max: 1000 },
 }
 
 const ENV_KEYS: Record<keyof Settings, string> = {
@@ -63,6 +67,8 @@ const ENV_KEYS: Record<keyof Settings, string> = {
   storeAttachments: 'MM_STORE_ATTACHMENTS',
   healthStaleHours: 'MM_HEALTH_STALE_HOURS',
   syncFlagChanges: 'MM_SYNC_FLAG_CHANGES',
+  idleGroupId: 'MM_IDLE_GROUP_ID',
+  idleMaxConnections: 'MM_IDLE_MAX_CONNECTIONS',
 }
 
 /**
