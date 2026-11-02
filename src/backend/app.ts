@@ -33,6 +33,7 @@ import { SearchService } from './search/search-service'
 import { CredentialCipher } from './security/credential-cipher'
 import { HealthService } from './stats/health-service'
 import { StatsService } from './stats/stats-service'
+import { StorageService } from './storage/storage-service'
 import { IdleManager } from './sync/idle-manager'
 import { toMailboxSummary } from './sync/mailbox-summary'
 import { AutoSyncScheduler } from './sync/scheduler'
@@ -80,6 +81,7 @@ export class BackendApp {
     readonly health: HealthService,
     readonly idle: IdleManager,
     readonly rules: RuleEngine,
+    readonly storage: StorageService,
     private readonly idleSyncBatch: Batcher<string>,
     private readonly scheduler: AutoSyncScheduler,
     private readonly appInfo: AppInfo,
@@ -220,6 +222,17 @@ export class BackendApp {
       webhook,
       logger,
     })
+    const storage = new StorageService({
+      db,
+      driver: dbConfig.driver,
+      dbFile: dbConfig.driver === 'sqlite' ? dbConfig.file : null,
+      attachmentsDir,
+      settings: () => settings.get(),
+      events,
+      logger,
+    })
+    // テストでは自動整理を走らせない（MM_STORAGE_SCHEDULE=0）
+    if (env.MM_STORAGE_SCHEDULE !== '0') storage.startSchedule()
     const search = new SearchService(messageRepo)
     const exporter = new ExportService(accountRepo, search, groupRepo, cipher, logger)
     const health = new HealthService(accountRepo, messageRepo, () => settings.get().healthStaleHours)
@@ -300,6 +313,7 @@ export class BackendApp {
       health,
       idle,
       rules,
+      storage,
       idleSyncBatch,
       scheduler,
       info,
@@ -584,6 +598,9 @@ export class BackendApp {
     'settings.get': async () => this.settings.get(),
     'settings.update': (p) => this.settings.update(p),
     'app.info': async () => this.info(),
+    'storage.stats': () => this.storage.stats(),
+    'storage.cleanup': (p) => this.storage.cleanup({ dryRun: p?.dryRun }),
+    'storage.vacuum': () => this.storage.vacuum(),
     'app.backup': (p) => this.backup(p.path),
     'app.restore': (p) => this.restore(p.path),
   }
@@ -600,6 +617,7 @@ export class BackendApp {
 
   async shutdown(): Promise<void> {
     this.scheduler.stop()
+    this.storage.stopSchedule()
     await this.idle.stop()
     this.idleSyncBatch.dispose()
     this.authTest.dispose()

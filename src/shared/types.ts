@@ -271,6 +271,29 @@ export interface Settings {
   idleGroupId: string;
   /** IDLE で同時に張る接続数の上限（サーバーの同時接続制限に合わせる） */
   idleMaxConnections: number;
+  /** この日数より古いメールのローカルコピーを自動で削除する（サーバー上は消さない）。0 = 無期限 */
+  retentionDays: number;
+  /** この日数より古い添付ファイル本体を削除する（必要時に再取得）。0 = 無期限 */
+  attachmentRetentionDays: number;
+}
+
+export interface StorageStats {
+  /** SQLite ファイル（WAL 含む）の大きさ。PostgreSQL では null */
+  dbBytes: number | null;
+  attachmentBytes: number;
+  attachmentFiles: number;
+  messages: number;
+  /** 本文（テキスト + HTML）の合計文字数の目安 */
+  bodyBytes: number;
+  oldestMessageAt: string | null;
+}
+
+export interface StorageCleanupResult {
+  dryRun: boolean;
+  messagesRemoved: number;
+  attachmentFilesRemoved: number;
+  orphanDirsRemoved: number;
+  bytesFreed: number;
 }
 
 export interface IdleStatus {

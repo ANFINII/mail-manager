@@ -5,6 +5,7 @@ import { useAppStore } from 'stores/app-store'
 import type { ForwardTarget } from '@shared/types'
 import type { Settings } from '@shared/types'
 import { api, errorMessage } from 'lib/api'
+import StoragePanel from 'components/widgets/StoragePanel'
 
 export default function SettingsTemplate() {
   const { t } = useTranslation()
@@ -286,6 +287,27 @@ export default function SettingsTemplate() {
           {t('settings.syncFlagChanges')}
         </label>
         <label>
+          {t('settings.retentionDays')}
+          <input
+            type="number"
+            min={0}
+            max={36500}
+            value={form.retentionDays}
+            onChange={num('retentionDays')}
+            data-testid="settings-retention-days"
+          />
+        </label>
+        <label>
+          {t('settings.attachmentRetentionDays')}
+          <input
+            type="number"
+            min={0}
+            max={36500}
+            value={form.attachmentRetentionDays}
+            onChange={num('attachmentRetentionDays')}
+          />
+        </label>
+        <label>
           {t('settings.healthStaleHours')}
           <input
             type="number"
@@ -361,6 +383,8 @@ export default function SettingsTemplate() {
           </table>
         )}
       </section>
+
+      <StoragePanel />
 
       <section>
         <h2>{t('settings.dataSection')}</h2>

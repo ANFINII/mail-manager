@@ -5,6 +5,8 @@ import type {
   AccountHealth,
   ForwardFailureListResult,
   IdleStatus,
+  StorageCleanupResult,
+  StorageStats,
   AccountListQuery,
   AccountSummary,
   AppInfo,
@@ -144,6 +146,14 @@ export interface RpcMethods {
     /** accountIds を指定するとその ID のアカウントだけを出力する（省略時は全件） */
     params: { path: string; accountIds?: string[] };
     result: { count: number };
+  };
+  'storage.stats': { params: Record<string, never>; result: StorageStats };
+  /** 保存期間の設定に従ってローカルのメール・添付を整理する（dryRun で件数だけ） */
+  'storage.cleanup': { params: { dryRun?: boolean }; result: StorageCleanupResult };
+  /** SQLite ファイルを詰める */
+  'storage.vacuum': {
+    params: Record<string, never>;
+    result: { before: number | null; after: number | null };
   };
   'app.backup': { params: { path: string }; result: { path: string; bytes: number } };
   'app.restore': { params: { path: string }; result: { pendingRestart: boolean } };

@@ -21,6 +21,8 @@ export const DEFAULT_SETTINGS: Settings = {
   syncFlagChanges: true,
   idleGroupId: '',
   idleMaxConnections: 50,
+  retentionDays: 0,
+  attachmentRetentionDays: 0,
 }
 
 type Spec =
@@ -48,6 +50,8 @@ const SPECS: Record<keyof Settings, Spec> = {
   syncFlagChanges: { kind: 'bool' },
   idleGroupId: { kind: 'string', max: 64 },
   idleMaxConnections: { kind: 'int', min: 1, max: 1000 },
+  retentionDays: { kind: 'int', min: 0, max: 36500 },
+  attachmentRetentionDays: { kind: 'int', min: 0, max: 36500 },
 }
 
 const ENV_KEYS: Record<keyof Settings, string> = {
@@ -69,6 +73,8 @@ const ENV_KEYS: Record<keyof Settings, string> = {
   syncFlagChanges: 'MM_SYNC_FLAG_CHANGES',
   idleGroupId: 'MM_IDLE_GROUP_ID',
   idleMaxConnections: 'MM_IDLE_MAX_CONNECTIONS',
+  retentionDays: 'MM_RETENTION_DAYS',
+  attachmentRetentionDays: 'MM_ATTACHMENT_RETENTION_DAYS',
 }
 
 /**
