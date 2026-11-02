@@ -16,6 +16,13 @@ export interface OpenedMailbox {
   uidValidity: number;
   uidNext: number;
   exists: number;
+  /** CONDSTORE 対応時の HIGHESTMODSEQ（10 進文字列）。非対応なら null */
+  highestModseq: string | null;
+}
+
+export interface FlagState {
+  uid: number;
+  flags: Set<string>;
 }
 
 export interface FetchedMessage {
@@ -48,6 +55,11 @@ export interface MailSession {
     uids: number[],
     opts: { source: boolean; structure: boolean },
   ): AsyncIterable<FetchedMessage>;
+  /**
+   * UID 範囲 [fromUid, toUid] のフラグだけを取得する。
+   * changedSince（CONDSTORE の MODSEQ）を渡すと、それ以降に変わったメッセージだけを返す。
+   */
+  fetchFlags(fromUid: number, toUid: number, changedSince?: string | null): AsyncIterable<FlagState>;
   downloadPart(uid: number, part: string, maxBytes?: number): Promise<DownloadedPart>;
   addFlags(uids: number[], flags: string[]): Promise<void>;
   removeFlags(uids: number[], flags: string[]): Promise<void>;

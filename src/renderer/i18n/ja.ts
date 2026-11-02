@@ -358,6 +358,7 @@ export const ja = {
       '自動同期の間隔と認証完了時の自動受信は、受信メール／ダッシュボードの「自動同期」ボタンが ON のときだけ動作します（起動時は OFF）。',
     notifyNewMail: '新着メールを macOS 通知で知らせる',
     healthStaleHours: '受信が途絶えたと判断する時間（時間、0 = 判定しない）',
+    syncFlagChanges: 'サーバー側の既読・スター変更と削除を同期時に取り込む（CONDSTORE 対応サーバーでは差分のみ取得）',
     storeAttachments: '添付ファイルの本体も同期時に保存する（転送が速くなります。ディスク使用量は増えます）',
     webhookUrl: 'Webhook URL（同期完了・新着・認証エラーを POST）',
     forwardTargetsSection: '転送先アカウント',

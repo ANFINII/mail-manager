@@ -262,6 +262,8 @@ export interface Settings {
   storeAttachments: boolean;
   /** 最終成功からこの時間（時間）を超えた認証済みアカウントを「要対応」にする。0 = 判定しない */
   healthStaleHours: number;
+  /** 同期時に、取得済みメールのサーバー側の既読・スター変更と削除を取り込む */
+  syncFlagChanges: boolean;
 }
 
 export interface AppInfo {

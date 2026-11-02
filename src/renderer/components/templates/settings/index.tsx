@@ -248,6 +248,15 @@ export default function SettingsTemplate() {
           />
           {t('settings.storeAttachments')}
         </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={form.syncFlagChanges}
+            onChange={(e) => setForm({ ...form, syncFlagChanges: e.target.checked })}
+            data-testid="settings-sync-flag-changes"
+          />
+          {t('settings.syncFlagChanges')}
+        </label>
         <label>
           {t('settings.healthStaleHours')}
           <input

@@ -18,6 +18,7 @@ export const DEFAULT_SETTINGS: Settings = {
   webhookUrl: '',
   storeAttachments: true,
   healthStaleHours: 24,
+  syncFlagChanges: true,
 }
 
 type Spec =
@@ -42,6 +43,7 @@ const SPECS: Record<keyof Settings, Spec> = {
   webhookUrl: { kind: 'string', max: 2048 },
   storeAttachments: { kind: 'bool' },
   healthStaleHours: { kind: 'int', min: 0, max: 24 * 365 },
+  syncFlagChanges: { kind: 'bool' },
 }
 
 const ENV_KEYS: Record<keyof Settings, string> = {
@@ -60,6 +62,7 @@ const ENV_KEYS: Record<keyof Settings, string> = {
   webhookUrl: 'MM_WEBHOOK_URL',
   storeAttachments: 'MM_STORE_ATTACHMENTS',
   healthStaleHours: 'MM_HEALTH_STALE_HOURS',
+  syncFlagChanges: 'MM_SYNC_FLAG_CHANGES',
 }
 
 /**

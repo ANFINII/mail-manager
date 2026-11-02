@@ -60,6 +60,8 @@ export interface MailboxesTable {
   sync_enabled: number;
   created_at: string;
   updated_at: string;
+  /** CONDSTORE: 前回同期時の HIGHESTMODSEQ（10 進文字列）。非対応サーバーは null */
+  highest_modseq: string | null;
 }
 
 export interface MessagesTable {

@@ -10,6 +10,8 @@ export interface FakeMessage extends BuiltMessage {
   flags: Set<string>;
   internalDate: Date;
   spec: FakeMessageSpec;
+  /** CONDSTORE: 最後に変更されたときの MODSEQ */
+  modseq: number;
 }
 
 export interface FakeMailbox {
@@ -19,6 +21,8 @@ export interface FakeMailbox {
   uidValidity: number;
   uidNext: number;
   messages: FakeMessage[];
+  /** CONDSTORE: フォルダ内の最大 MODSEQ */
+  highestModseq: number;
 }
 
 export interface FakeUser {
@@ -40,6 +44,10 @@ export interface FakeImapOptions {
   greetingDelayMs?: number;
   /** FETCH 応答を遅らせる（ms、メッセージごと） */
   fetchDelayMs?: number;
+  /** CONDSTORE（MODSEQ / CHANGEDSINCE）に対応する */
+  condstore?: boolean;
+  /** IDLE に対応する */
+  idle?: boolean;
 }
 
 export interface FakeImapStats {
@@ -61,12 +69,15 @@ export interface FakeImapStats {
   logouts: number;
   /** LOGOUT を受け取らずに切断された接続数 */
   closedWithoutLogout: number;
+  /** CHANGEDSINCE 付き FETCH の回数 */
+  changedSinceFetches: number;
+  idles: number;
 }
 
 let uidValiditySeq = 1_725_000_000;
 
 export function createMailbox(path: string, specialUse?: string, noselect = false): FakeMailbox {
-  return { path, specialUse, noselect, uidValidity: uidValiditySeq++, uidNext: 1, messages: [] };
+  return { path, specialUse, noselect, uidValidity: uidValiditySeq++, uidNext: 1, messages: [], highestModseq: 1 };
 }
 
 function defaultMailboxes(): Map<string, FakeMailbox> {
@@ -102,6 +113,8 @@ export class FakeImapServer {
     appends: 0,
     logouts: 0,
     closedWithoutLogout: 0,
+    changedSinceFetches: 0,
+    idles: 0,
   };
   port = 0;
   private server: net.Server | tls.Server | null = null;
@@ -145,9 +158,34 @@ export class FakeImapServer {
       flags: new Set(spec.flags ?? []),
       internalDate: spec.date,
       spec,
+      modseq: ++mb.highestModseq,
     };
     mb.messages.push(msg);
+    this.notifyIdlers(mb);
     return msg;
+  }
+
+  /** サーバー側（別クライアント）でフラグを変えたことにする */
+  setFlags(email: string, path: string, uid: number, flags: string[]): void {
+    const mb = this.mailbox(email, path);
+    const msg = mb.messages.find((m) => m.uid === uid);
+    if (!msg) throw new Error(`no message ${uid}`);
+    msg.flags = new Set(flags);
+    msg.modseq = ++mb.highestModseq;
+  }
+
+  /** サーバー側（別クライアント）でメールを削除したことにする */
+  removeMessage(email: string, path: string, uid: number): void {
+    const mb = this.mailbox(email, path);
+    mb.messages = mb.messages.filter((m) => m.uid !== uid);
+    mb.highestModseq++;
+  }
+
+  /** IDLE 中のセッション（フォルダ → 通知関数） */
+  readonly idlers = new Set<{ mailbox: FakeMailbox; notify: () => void }>();
+
+  private notifyIdlers(mb: FakeMailbox): void {
+    for (const i of this.idlers) if (i.mailbox === mb) i.notify();
   }
 
   addMessages(email: string, path: string, specs: FakeMessageSpec[]): FakeMessage[] {
@@ -225,7 +263,13 @@ export class FakeImapServer {
       if (!socket.destroyed) socket.write(data);
     };
     const send = (line: string) => write(line + '\r\n');
-    const capabilities = 'IMAP4rev1 AUTH=PLAIN AUTH=XOAUTH2 UIDPLUS MOVE SPECIAL-USE';
+    const capabilities = [
+      'IMAP4rev1 AUTH=PLAIN AUTH=XOAUTH2 UIDPLUS MOVE SPECIAL-USE',
+      this.opts.condstore ? 'ENABLE CONDSTORE' : '',
+      this.opts.idle ? 'IDLE' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
     const sendGreeting = () => send(`* OK [CAPABILITY ${capabilities}] Fake IMAP ready`);
     if (this.opts.greetingDelayMs) setTimeout(sendGreeting, this.opts.greetingDelayMs);
     else sendGreeting();
@@ -281,6 +325,7 @@ class Session {
     null;
   private user: FakeUser | null = null;
   private selected: FakeMailbox | null = null;
+  private idling: { tag: string; entry: { mailbox: FakeMailbox; notify: () => void } } | null = null;
 
   constructor(
     private readonly server: FakeImapServer,
@@ -369,6 +414,14 @@ class Session {
   }
 
   async handleLine(line: string): Promise<void> {
+    if (this.idling) {
+      if (line.trim().toUpperCase() === 'DONE') {
+        this.server.idlers.delete(this.idling.entry);
+        this.send(`${this.idling.tag} OK IDLE terminated`);
+        this.idling = null;
+      }
+      return;
+    }
     if (this.pending && 'failNo' in this.pending) {
       const tag = this.pending.tag;
       this.pending = null;
@@ -417,6 +470,25 @@ class Session {
       case 'NOOP':
         this.send(`${tag} OK NOOP completed`);
         return;
+      case 'ENABLE': {
+        const want = args.toUpperCase().split(/\s+/).filter((c) => c === 'CONDSTORE' && this.opts.condstore);
+        this.send(`* ENABLED${want.length ? ' ' + want.join(' ') : ''}`);
+        this.send(`${tag} OK ENABLE completed`);
+        return;
+      }
+      case 'IDLE': {
+        if (!this.opts.idle || !this.selected) {
+          this.send(`${tag} BAD IDLE not available`);
+          return;
+        }
+        this.server.stats.idles++;
+        const mb = this.selected;
+        const entry = { mailbox: mb, notify: () => this.send(`* ${mb.messages.length} EXISTS`) };
+        this.server.idlers.add(entry);
+        this.idling = { tag, entry };
+        this.send('+ idling');
+        return;
+      }
       case 'LOGOUT':
         this.send('* BYE Logging out');
         this.send(`${tag} OK LOGOUT completed`);
@@ -527,6 +599,7 @@ class Session {
         this.send('* 0 RECENT');
         this.send(`* OK [UIDVALIDITY ${mb.uidValidity}] UIDs valid`);
         this.send(`* OK [UIDNEXT ${mb.uidNext}] Predicted next UID`);
+        if (this.opts.condstore) this.send(`* OK [HIGHESTMODSEQ ${mb.highestModseq}] Highest`);
         this.send(`${tag} OK [${cmd === 'EXAMINE' ? 'READ-ONLY' : 'READ-WRITE'}] ${cmd} completed`);
         return;
       }
@@ -556,6 +629,7 @@ class Session {
         const header = headerEnd >= 0 ? raw.subarray(0, headerEnd + 4) : raw;
         const text = headerEnd >= 0 ? raw.subarray(headerEnd + 4) : Buffer.alloc(0);
         mb.messages.push({
+          modseq: ++mb.highestModseq,
           raw,
           header,
           text,
@@ -610,6 +684,7 @@ class Session {
           if (op === 'FLAGS') msg.flags = new Set(flags);
           else if (op === '+FLAGS') flags.forEach((f) => msg.flags.add(f));
           else flags.forEach((f) => msg.flags.delete(f));
+          msg.modseq = ++mb.highestModseq;
           if (!silent)
             this.send(
               `* ${mb.messages.indexOf(msg) + 1} FETCH (UID ${msg.uid} FLAGS (${[...msg.flags].join(' ')}))`,
@@ -640,7 +715,12 @@ class Session {
         const srcUids: number[] = [];
         const dstUids: number[] = [];
         for (const msg of targets) {
-          const copy: FakeMessage = { ...msg, uid: target.uidNext++, flags: new Set(msg.flags) };
+          const copy: FakeMessage = {
+            ...msg,
+            uid: target.uidNext++,
+            flags: new Set(msg.flags),
+            modseq: ++target.highestModseq,
+          };
           target.messages.push(copy);
           srcUids.push(msg.uid);
           dstUids.push(copy.uid);
@@ -721,8 +801,15 @@ class Session {
 
   private async fetch(tag: string, mb: FakeMailbox, args: string, uidMode: boolean): Promise<void> {
     this.server.stats.fetches++;
-    const [set, itemsRaw] = splitFirst(args);
-    const targets = this.resolve(mb, set, uidMode);
+    const [set, itemsWithMods] = splitFirst(args);
+    const mod = /\s*\(CHANGEDSINCE (\d+)[^)]*\)\s*$/i.exec(itemsWithMods);
+    const itemsRaw = mod ? itemsWithMods.slice(0, mod.index) : itemsWithMods;
+    let targets = this.resolve(mb, set, uidMode);
+    if (mod) {
+      this.server.stats.changedSinceFetches++;
+      const since = Number(mod[1]);
+      targets = targets.filter((m) => m.modseq > since);
+    }
     const items = parseFetchItems(itemsRaw);
     for (const msg of targets) {
       if (this.opts.fetchDelayMs) await new Promise((r) => setTimeout(r, this.opts.fetchDelayMs));
@@ -773,6 +860,7 @@ class Session {
         }
       }
       if (includeUid) parts.unshift(`UID ${msg.uid}`);
+      if (mod || items.some((i) => i.name === 'MODSEQ')) parts.push(`MODSEQ (${msg.modseq})`);
       chunks.push(`* ${seq} FETCH (`);
       parts.forEach((p, i) => {
         if (i > 0) chunks.push(' ');

@@ -424,6 +424,17 @@ migrations['0014_account_health'] = {
   },
 }
 
+migrations['0015_mailbox_modseq'] = {
+  async up(db: Kysely<unknown>) {
+    // CONDSTORE 対応サーバーで、前回同期時の HIGHESTMODSEQ を控える（フラグ変更の差分取得用）。
+    // 64bit 整数なので文字列で持つ。
+    await db.schema.alterTable('mailboxes').addColumn('highest_modseq', 'text').execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.alterTable('mailboxes').dropColumn('highest_modseq').execute()
+  },
+}
+
 const provider: MigrationProvider = {
   async getMigrations() {
     return migrations

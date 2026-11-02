@@ -188,6 +188,35 @@ export class MessageRepository {
     return out
   }
 
+  /** フラグ同期用: フォルダ内のローカル保存済みメッセージ（UID ≤ maxUid）のフラグ状態 */
+  async flagStates(
+    mailboxId: string,
+    maxUid: number,
+  ): Promise<Array<{ id: string; remote_uid: number; seen: number; flagged: number; answered: number }>> {
+    return this.db
+      .selectFrom('messages')
+      .select(['id', 'remote_uid', 'seen', 'flagged', 'answered'])
+      .where('mailbox_id', '=', mailboxId)
+      .where('remote_uid', '<=', maxUid)
+      .execute()
+  }
+
+  /** サーバー側のフラグ変更をローカルへ反映する */
+  async applyFlagStates(
+    updates: Array<{ id: string; seen: number; flagged: number; answered: number }>,
+    now: string,
+  ): Promise<void> {
+    if (updates.length === 0) return
+    await this.db.transaction().execute(async (trx) => {
+      for (const u of updates)
+        await trx
+          .updateTable('messages')
+          .set({ seen: u.seen, flagged: u.flagged, answered: u.answered, updated_at: now })
+          .where('id', '=', u.id)
+          .execute()
+    })
+  }
+
   async countAll(): Promise<number> {
     const r = await this.db
       .selectFrom('messages')

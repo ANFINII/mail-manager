@@ -4,6 +4,7 @@ import type { ConnectionTestParams, EmailProvider } from './email-provider'
 import type {
   DownloadedPart,
   FetchedMessage,
+  FlagState,
   MailSession,
   MailboxInfo,
   OpenedMailbox,
@@ -130,6 +131,25 @@ class ImapFlowSession implements MailSession {
       uidValidity: Number(mb.uidValidity),
       uidNext: mb.uidNext,
       exists: mb.exists,
+      highestModseq:
+        mb.highestModseq !== undefined && !mb.noModseq ? mb.highestModseq.toString() : null,
+    }
+  }
+
+  async *fetchFlags(
+    fromUid: number,
+    toUid: number,
+    changedSince?: string | null,
+  ): AsyncIterable<FlagState> {
+    this.check()
+    if (toUid < fromUid) return
+    const opts: { uid: true; changedSince?: bigint } = { uid: true }
+    if (changedSince) opts.changedSince = BigInt(changedSince)
+    for await (const msg of this.client.fetch(`${fromUid}:${toUid}`, { uid: true, flags: true }, opts)) {
+      this.check()
+      // "N:M" は範囲外の UID にもマッチしうる（* の扱い）ため範囲で絞る
+      if (msg.uid < fromUid || msg.uid > toUid) continue
+      yield { uid: msg.uid, flags: msg.flags ?? new Set() }
     }
   }
 

@@ -113,16 +113,17 @@ describe('IMAP synchronisation', () => {
     for (let i = 11; i <= 13; i++) imap.addMessage(a.email, 'INBOX', makeMessageSpec(i, a.email));
     await runSync();
     expect((await t.app.call('search.query', { page: 1, pageSize: 50 })).total).toBe(13);
-    expect(imap.stats.fetchedMessages - fetchedBefore).toBe(6); // 3 件 × (構造 + 本文) の 2 フェーズ
+    // 3 件 × (構造 + 本文) の 2 フェーズ + 既存 10 件のフラグ確認（CONDSTORE 非対応サーバーなので全件）
+    expect(imap.stats.fetchedMessages - fetchedBefore).toBe(6 + 10);
     const mb = (await t.app.call('mailboxes.list', { accountId: account.id })).find(
       (m) => m.path === 'INBOX',
     );
     expect(mb).toMatchObject({ storedMessages: 13, lastSyncUid: 13, totalMessages: 13 });
 
-    // 3 回目: 変化なし
+    // 3 回目: 新着なし。本文は再取得せず、フラグ確認（13 件）だけ行う
     const before = imap.stats.fetchedMessages;
     await runSync();
-    expect(imap.stats.fetchedMessages).toBe(before);
+    expect(imap.stats.fetchedMessages).toBe(before + 13);
     expect(t.logs.lines.join('\n')).toContain('sync completed');
   }, 60_000);
 

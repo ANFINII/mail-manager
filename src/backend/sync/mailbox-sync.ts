@@ -37,6 +37,10 @@ export interface SyncContext {
 export interface SyncOutcome {
   newMessages: number;
   mailboxesSynced: number;
+  /** サーバー側でフラグ（既読・スター・返信済み）が変わり、ローカルへ反映したメッセージ ID */
+  flagChangedIds: string[];
+  /** サーバー側で削除（または別フォルダへ移動）されたため、ローカルから消したメッセージ ID */
+  removedIds: string[];
   latest: { subject: string; from: string | null } | null;
 }
 
@@ -74,7 +78,13 @@ export async function syncAccount(ctx: SyncContext): Promise<SyncOutcome> {
   const check = () => {
     if (signal.aborted) throw new AbortError()
   }
-  const outcome: SyncOutcome = { newMessages: 0, mailboxesSynced: 0, latest: null }
+  const outcome: SyncOutcome = {
+    newMessages: 0,
+    mailboxesSynced: 0,
+    flagChangedIds: [],
+    removedIds: [],
+    latest: null,
+  }
   let latestDate = ''
 
   const list = await session.listMailboxes()
@@ -106,6 +116,15 @@ export async function syncAccount(ctx: SyncContext): Promise<SyncOutcome> {
         },
       )
       lastUid = 0
+    }
+
+    // 既存メールの変更を取り込む（UIDVALIDITY が変わって全消去した場合・初回は対象なし）
+    let reconciledModseq: string | null = null
+    if (lastUid > 0 && settings.syncFlagChanges) {
+      const r = await reconcileExisting(ctx, mailbox, opened, lastUid)
+      outcome.flagChangedIds.push(...r.flagChangedIds)
+      outcome.removedIds.push(...r.removedIds)
+      reconciledModseq = r.modseq
     }
 
     // 全件取得モードでは UID 1 から探し、初回上限で飛ばした古いメールも遡って取得する。
@@ -248,6 +267,8 @@ export async function syncAccount(ctx: SyncContext): Promise<SyncOutcome> {
         last_sync_uid: Math.max(highestUid, lastUid),
         total_messages: opened.exists,
         last_sync_at: ctx.now(),
+        // 初回（lastUid = 0）も、今回取り込んだ時点の MODSEQ を起点にする
+        highest_modseq: reconciledModseq ?? opened.highestModseq,
       },
       ctx.now(),
     )
@@ -260,4 +281,67 @@ export async function syncAccount(ctx: SyncContext): Promise<SyncOutcome> {
     })
   }
   return outcome
+}
+
+const FLAG_KEYS = [
+  ['seen', '\\Seen'],
+  ['flagged', '\\Flagged'],
+  ['answered', '\\Answered'],
+] as const
+
+/**
+ * 取得済みメールのサーバー側の変更をローカルへ反映する。
+ *  - フラグ: CONDSTORE 対応なら前回 MODSEQ 以降に変わったものだけ、非対応なら取得済み範囲のフラグを一括取得して比較
+ *  - 削除: UID SEARCH でサーバーに残っている UID を調べ、無くなったものをローカルから消す
+ */
+export async function reconcileExisting(
+  ctx: SyncContext,
+  mailbox: MailboxRow,
+  opened: { highestModseq: string | null },
+  lastUid: number,
+): Promise<{ flagChangedIds: string[]; removedIds: string[]; modseq: string | null }> {
+  const { session, messageRepo, signal } = ctx
+  const local = await messageRepo.flagStates(mailbox.id, lastUid)
+  if (local.length === 0) return { flagChangedIds: [], removedIds: [], modseq: opened.highestModseq }
+  const byUid = new Map(local.map((m) => [m.remote_uid, m]))
+
+  // 1) 削除の検出
+  const serverUids = new Set(await session.searchUidsFrom(1))
+  const removed = local.filter((m) => !serverUids.has(m.remote_uid))
+  const removedIds = removed.map((m) => m.id)
+  if (removedIds.length > 0) await messageRepo.deleteByIds(removedIds)
+  for (const m of removed) byUid.delete(m.remote_uid)
+
+  // 2) フラグ変更の取り込み
+  const flagChangedIds: string[] = []
+  const prevModseq = mailbox.highest_modseq
+  const unchanged = !!prevModseq && !!opened.highestModseq && prevModseq === opened.highestModseq
+  if (!unchanged && byUid.size > 0) {
+    const changedSince = prevModseq && opened.highestModseq ? prevModseq : null
+    const minUid = Math.min(...byUid.keys())
+    const updates: Array<{ id: string; seen: number; flagged: number; answered: number }> = []
+    for await (const f of session.fetchFlags(minUid, lastUid, changedSince)) {
+      if (signal.aborted) throw new AbortError()
+      const row = byUid.get(f.uid)
+      if (!row) continue
+      const next = {
+        id: row.id,
+        seen: f.flags.has(FLAG_KEYS[0][1]) ? 1 : 0,
+        flagged: f.flags.has(FLAG_KEYS[1][1]) ? 1 : 0,
+        answered: f.flags.has(FLAG_KEYS[2][1]) ? 1 : 0,
+      }
+      if (next.seen !== row.seen || next.flagged !== row.flagged || next.answered !== row.answered)
+        updates.push(next)
+    }
+    await messageRepo.applyFlagStates(updates, ctx.now())
+    flagChangedIds.push(...updates.map((u) => u.id))
+  }
+  if (removedIds.length > 0 || flagChangedIds.length > 0)
+    ctx.logger.info(`Account ${ctx.account.email} mailbox ${mailbox.path} reconciled`, {
+      accountId: ctx.account.id,
+      flagChanges: flagChangedIds.length,
+      removed: removedIds.length,
+      condstore: !!opened.highestModseq,
+    })
+  return { flagChangedIds, removedIds, modseq: opened.highestModseq }
 }

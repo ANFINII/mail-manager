@@ -361,6 +361,7 @@ export const en: Translation = {
       'The interval and auto-receive on authentication only apply while the "Auto sync" button (Inbox / Dashboard) is ON. It is OFF at startup.',
     notifyNewMail: 'Show macOS notifications for new mail',
     healthStaleHours: 'Hours without a successful sync before flagging (0 = off)',
+    syncFlagChanges: 'Import read/star changes and deletions made on the server (only changes on CONDSTORE servers)',
     storeAttachments: 'Store attachment files during sync (faster forwarding; uses more disk)',
     webhookUrl: 'Webhook URL (POST on sync complete, new mail, auth failure)',
     forwardTargetsSection: 'Forward destinations',

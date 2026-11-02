@@ -14,6 +14,7 @@ export interface MailboxSyncPatch {
   last_sync_uid?: number;
   total_messages?: number;
   last_sync_at?: string | null;
+  highest_modseq?: string | null;
 }
 
 export class MailboxRepository {

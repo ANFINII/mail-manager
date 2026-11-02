@@ -206,6 +206,10 @@ export class SyncService {
         newMessages: outcome.newMessages,
         total: messageCount,
       })
+      if (outcome.flagChangedIds.length > 0)
+        this.deps.events.emit({ type: 'messages.changed', ids: outcome.flagChangedIds })
+      if (outcome.removedIds.length > 0)
+        this.deps.events.emit({ type: 'messages.changed', ids: outcome.removedIds, deleted: true })
       if (outcome.newMessages > 0) {
         const notice = {
           accountId,
