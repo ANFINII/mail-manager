@@ -166,6 +166,8 @@ async function runWithConcurrency<T>(
  * サーバー操作はアカウントごとに 1 セッションにまとめ、キューで同時実行数を制限する。
  */
 export class MessageService {
+  /** 実行中の一括操作（履歴 ID → 完了）。取り消しが履歴の書き込みを追い越さないように待つ */
+  private readonly runningOps = new Map<string, Promise<void>>()
   readonly queue: TaskQueue
   readonly tracker: JobTracker
   private readonly now: () => string
@@ -299,6 +301,8 @@ export class MessageService {
     const op = await history.get(opId)
     if (!op) throw new Error('操作が見つかりません')
     if (op.undone_at) throw new Error('この操作はすでに取り消しています')
+    // 実行中の操作は、終わって履歴がそろってから戻す
+    await this.runningOps.get(opId)
     const items = await history.items(opId)
     const byAccount = new Map<string, MailOpItemRow[]>()
     for (const it of items) byAccount.set(it.account_id, [...(byAccount.get(it.account_id) ?? []), it])
@@ -914,8 +918,9 @@ export class MessageService {
       messages: rows.length,
       accounts: byAccount.size,
     })
+    const tasks: Promise<void>[] = []
     for (const [accountId, messages] of byAccount) {
-      this.queue
+      const task = this.queue
         .add(() => this.runForAccount(job, accountId, messages, op), {
           signal: job.controller.signal,
           priority: PRIORITY_MANUAL,
@@ -923,6 +928,14 @@ export class MessageService {
         .catch((err) => {
           this.tracker.complete(job, accountId, err instanceof AbortError ? 'cancelled' : 'failed')
         })
+      tasks.push(task)
+    }
+    // 取り消しは、この操作の履歴（移動先 UID など）が書き終わるまで待つ
+    if (op.historyId) {
+      const id = op.historyId
+      const done = Promise.all(tasks).then(() => undefined)
+      this.runningOps.set(id, done)
+      void done.finally(() => this.runningOps.delete(id))
     }
     return { ...job.info }
   }
