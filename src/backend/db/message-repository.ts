@@ -800,10 +800,11 @@ export class MessageRepository {
             .where(sql`messages_fts`, 'match', match),
         )
       } else if (match) {
+        // PostgreSQL: pg_trgm の GIN 索引（0017）が効く lower(列) LIKE で全列を部分一致検索する
         for (const term of query.text.trim().split(/\s+/).filter(Boolean))
-          out = whereAnyColumnLike(out, term)
+          out = whereAnyColumnLike(out, term, true)
       }
-      for (const term of likeTerms) out = whereAnyColumnLike(out, term)
+      for (const term of likeTerms) out = whereAnyColumnLike(out, term, this.driver === 'postgres')
     }
     return out
   }
@@ -871,7 +872,15 @@ export class MessageRepository {
   }
 }
 
-function whereAnyColumnLike<Q extends { where: (...args: any[]) => Q }>(q: Q, term: string): Q {
+/**
+ * 件名・差出人・宛先・本文（withCcAndAttachments なら Cc と添付ファイル名も）のどれかに部分一致。
+ * 式は PostgreSQL の trigram 索引（migrations 0017）と一致させてある。
+ */
+function whereAnyColumnLike<Q extends { where: (...args: any[]) => Q }>(
+  q: Q,
+  term: string,
+  withCcAndAttachments = false,
+): Q {
   const like = `%${escapeLike(term.toLowerCase())}%`
   return q.where((eb: any) =>
     eb.or([
@@ -880,6 +889,12 @@ function whereAnyColumnLike<Q extends { where: (...args: any[]) => Q }>(q: Q, te
       eb(sql`lower(coalesce(messages.from_name, ''))`, 'like', like),
       eb(sql`lower(messages.to_addresses)`, 'like', like),
       eb(sql`lower(coalesce(messages.text_body, ''))`, 'like', like),
+      ...(withCcAndAttachments
+        ? [
+            eb(sql`lower(messages.cc_addresses)`, 'like', like),
+            sql<boolean>`exists (select 1 from attachments a where a.message_id = messages.id and lower(a.filename) like ${like})`,
+          ]
+        : []),
     ]),
   )
 }

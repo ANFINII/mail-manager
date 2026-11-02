@@ -471,6 +471,46 @@ migrations['0016_rule_actions'] = {
   },
 }
 
+migrations['0017_postgres_trigram_search'] = {
+  async up(db: Kysely<unknown>) {
+    // PostgreSQL の全文検索。SQLite の FTS5(trigram) に相当するものとして pg_trgm の GIN 索引を張る。
+    // 検索は lower(列) LIKE '%語%' で行うので、索引の式は検索側（whereAnyColumnLike など）と完全に一致させる。
+    // 拡張を作る権限が無い環境では索引なし（従来どおりの逐次走査）で動かす。
+    if (currentDriver !== 'postgres') return
+    try {
+      await sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`.execute(db)
+    } catch {
+      return
+    }
+    const indexes: Array<[string, string, string]> = [
+      ['idx_messages_subject_trgm2', 'messages', 'lower(subject)'],
+      ['idx_messages_from_address_trgm', 'messages', "lower(coalesce(from_address, ''))"],
+      ['idx_messages_from_name_trgm', 'messages', "lower(coalesce(from_name, ''))"],
+      ['idx_messages_to_trgm', 'messages', 'lower(to_addresses)'],
+      ['idx_messages_cc_trgm', 'messages', 'lower(cc_addresses)'],
+      ['idx_messages_body_trgm', 'messages', "lower(coalesce(text_body, ''))"],
+      ['idx_attachments_filename_trgm', 'attachments', 'lower(filename)'],
+    ]
+    for (const [name, table, expr] of indexes)
+      await sql
+        .raw(`CREATE INDEX IF NOT EXISTS ${name} ON ${table} USING gin ((${expr}) gin_trgm_ops)`)
+        .execute(db)
+  },
+  async down(db: Kysely<unknown>) {
+    if (currentDriver !== 'postgres') return
+    for (const name of [
+      'idx_messages_subject_trgm2',
+      'idx_messages_from_address_trgm',
+      'idx_messages_from_name_trgm',
+      'idx_messages_to_trgm',
+      'idx_messages_cc_trgm',
+      'idx_messages_body_trgm',
+      'idx_attachments_filename_trgm',
+    ])
+      await sql.raw(`DROP INDEX IF EXISTS ${name}`).execute(db)
+  },
+}
+
 const provider: MigrationProvider = {
   async getMigrations() {
     return migrations

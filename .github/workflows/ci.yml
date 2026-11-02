@@ -30,3 +30,29 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+
+  postgres:
+    name: test against PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: mm
+          POSTGRES_PASSWORD: mm
+          POSTGRES_DB: mm
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U mm" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: npx vitest run tests/integration/postgres.test.ts tests/integration/postgres-search.test.ts
+        env:
+          DATABASE_URL: postgres://mm:mm@localhost:5432/mm
