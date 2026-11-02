@@ -325,7 +325,7 @@ test('received mail search, viewer, forward and receive-sync', async () => {
   await page.getByTestId('result-row').first().click();
   await expect(page.getByTestId('message-viewer')).toContainText('report-10.pdf');
   await page.getByTestId('btn-download-attachment').first().click();
-  await expect(page.getByTestId('message-viewer')).toContainText(/Finder|Show in Finder/, {
+  await expect(page.getByTestId('message-viewer')).toContainText(/フォルダで表示|Show in folder/, {
     timeout: 30_000,
   });
   await page.screenshot({ path: path.join(SHOTS, 'viewer.png') });
