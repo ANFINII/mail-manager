@@ -1,7 +1,27 @@
 import path from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron'
+import squirrelStartup from 'electron-squirrel-startup'
+import { updateElectronApp, UpdateSourceType } from 'update-electron-app'
 import { BackendHost } from './backend-host'
 import { loadOrCreateMasterKey } from './key-provider'
+
+// Windows のインストーラー（Squirrel）がショートカット作成などのために起動したときは、すぐ終了する
+if (squirrelStartup) app.quit()
+
+// 配布版の自動アップデート（GitHub Releases → update.electronjs.org）。
+// macOS は署名済みビルドのみ、Linux は対象外。開発中・E2E テストでは動かさない。
+if (
+  app.isPackaged &&
+  process.platform !== 'linux' &&
+  process.env.MM_DISABLE_AUTO_UPDATE !== '1' &&
+  !process.env.MM_USER_DATA
+) {
+  updateElectronApp({
+    updateSource: { type: UpdateSourceType.ElectronPublicUpdateService, repo: 'ANFINII/mail-manager' },
+    updateInterval: '1 hour',
+    notifyUser: true,
+  })
+}
 
 // テスト・開発用: userData の場所を差し替える
 if (process.env.MM_USER_DATA) app.setPath('userData', process.env.MM_USER_DATA)

@@ -6,7 +6,7 @@ export interface BackendHostOptions {
   scriptPath: string;
   userDataPath: string;
   masterKey: Buffer;
-  keyMode: 'keychain' | 'insecure-file';
+  keyMode: 'keychain' | 'insecure-file' | 'basic-text';
   version: string;
   env: NodeJS.ProcessEnv;
 }

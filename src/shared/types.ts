@@ -313,7 +313,8 @@ export interface AppInfo {
   version: string;
   dbPath: string;
   logPath: string;
-  keyMode: 'keychain' | 'insecure-file' | 'unknown';
+  /** keychain: OS の安全なストレージ / basic-text: Linux でキーリングが無く保護が弱い / insecure-file: テスト専用 */
+  keyMode: 'keychain' | 'insecure-file' | 'basic-text' | 'unknown';
   envOverrides: string[];
 }
 

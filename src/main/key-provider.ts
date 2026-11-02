@@ -5,12 +5,12 @@ import { safeStorage } from 'electron'
 
 export interface MasterKey {
   key: Buffer;
-  mode: 'keychain' | 'insecure-file';
+  mode: 'keychain' | 'insecure-file' | 'basic-text';
 }
 
 /**
  * 認証情報暗号化用のマスターキーを用意する。
- * - 通常: 乱数 32 バイトを生成し、Electron safeStorage（macOS では Keychain 由来の鍵）で包んで userData/master.key に保存
+ * - 通常: 乱数 32 バイトを生成し、Electron safeStorage（macOS: Keychain / Windows: DPAPI / Linux: libsecret・KWallet）で包んで userData/master.key に保存
  * - MM_INSECURE_KEY_FILE=1（テスト専用）: 0600 のファイルに生の鍵を置く
  * どちらの場合も鍵は DB には入らない。
  */
@@ -23,15 +23,21 @@ export async function loadOrCreateMasterKey(
   const insecurePath = path.join(userDataPath, 'master.key.insecure')
 
   if (!opts.allowInsecure && safeStorage.isEncryptionAvailable()) {
+    // Linux でキーリング（GNOME Keyring / KWallet）が無いと safeStorage は固定鍵（basic_text）になり、
+    // 実質的に保護されない。動作は続けるが、設定画面で警告する。
+    const mode: MasterKey['mode'] =
+      process.platform === 'linux' && safeStorage.getSelectedStorageBackend?.() === 'basic_text'
+        ? 'basic-text'
+        : 'keychain'
     if (fs.existsSync(keyPath)) {
       const hex = safeStorage.decryptString(fs.readFileSync(keyPath))
       const key = Buffer.from(hex, 'hex')
       if (key.length !== 32) throw new Error('master.key is corrupted')
-      return { key, mode: 'keychain' }
+      return { key, mode }
     }
     const key = randomBytes(32)
     fs.writeFileSync(keyPath, safeStorage.encryptString(key.toString('hex')), { mode: 0o600 })
-    return { key, mode: 'keychain' }
+    return { key, mode }
   }
 
   if (opts.allowInsecure) {
@@ -45,6 +51,6 @@ export async function loadOrCreateMasterKey(
   }
 
   throw new Error(
-    'OS の安全なストレージ (Keychain) が利用できないため、認証情報の暗号鍵を保護できません。',
+    'OS の安全なストレージ（Keychain / DPAPI / キーリング）が利用できないため、認証情報の暗号鍵を保護できません。',
   )
 }

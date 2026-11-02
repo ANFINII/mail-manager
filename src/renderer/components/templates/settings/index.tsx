@@ -430,7 +430,7 @@ export default function SettingsTemplate() {
             </div>
             <div className="prop">
               <dt>{t('settings.keyMode')}</dt>
-              <dd className={info.keyMode === 'insecure-file' ? 'warn' : ''}>
+              <dd className={info.keyMode === 'insecure-file' || info.keyMode === 'basic-text' ? 'warn' : ''}>
                 {t(`keyMode.${info.keyMode}`)}
               </dd>
             </div>
