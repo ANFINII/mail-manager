@@ -35,6 +35,7 @@ export interface MessageRef {
 export interface FlagPatch {
   seen?: boolean;
   flagged?: boolean;
+  answered?: boolean;
 }
 
 const CHUNK = 50
@@ -364,6 +365,7 @@ export class MessageRepository {
     const set: Partial<MessageRow> = { updated_at: now }
     if (patch.seen !== undefined) set.seen = patch.seen ? 1 : 0
     if (patch.flagged !== undefined) set.flagged = patch.flagged ? 1 : 0
+    if (patch.answered !== undefined) set.answered = patch.answered ? 1 : 0
     let n = 0
     for (let i = 0; i < ids.length; i += 200) {
       const r = await this.db

@@ -6,6 +6,8 @@ import type {
   ForwardFailureListResult,
   IdleStatus,
   CodeListQuery,
+  MailTemplate,
+  MailTemplateInput,
   ReceivedCode,
   OAuthLoginStart,
   OAuthLoginStatus,
@@ -117,6 +119,17 @@ export interface RpcMethods {
     params: { accountId: string; to: string; subject: string; text: string };
     result: SendResult;
   };
+  /**
+   * 受信メールに返信する（送信元はそのメールを受信したアカウント）。
+   * quote で元の本文を引用し、quoteHeader で引用の見出し（例: 「2026/1/1 山田 太郎 のメッセージ:」）を指定できる。
+   */
+  'messages.reply': {
+    params: { id: string; text: string; replyAll?: boolean; quote?: boolean; quoteHeader?: string };
+    result: SendResult;
+  };
+  'templates.list': { params: Record<string, never>; result: MailTemplate[] };
+  'templates.save': { params: MailTemplateInput; result: MailTemplate[] };
+  'templates.remove': { params: { id: string }; result: MailTemplate[] };
   'messages.forward': { params: { ids: string[]; to: string }; result: ForwardResult };
   'messages.forwardAll': { params: { query: SearchQuery; to: string }; result: ForwardResult };
   'forwards.list': { params: ForwardListQuery; result: ForwardListResult };

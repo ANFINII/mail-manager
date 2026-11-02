@@ -8,6 +8,7 @@ import { formatDateTime } from 'utils/format'
 import Button from 'components/parts/Button'
 import CodeChip from 'components/parts/CodeChip'
 import Forward from 'components/widgets/Forward'
+import Reply from 'components/widgets/Reply'
 
 function formatAddr(a: AddressInfo): string {
   return a.name ? `${a.name} <${a.address}>` : a.address
@@ -71,6 +72,7 @@ export default function MessageViewer(props: Props): React.JSX.Element {
   const [remoteImages, setRemoteImages] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [showForward, setShowForward] = useState(false)
+  const [replyMode, setReplyMode] = useState<'one' | 'all' | null>(null)
   const locale = i18n.language === 'en' ? 'en-US' : 'ja-JP'
 
   useEffect(() => {
@@ -159,6 +161,12 @@ export default function MessageViewer(props: Props): React.JSX.Element {
         <div className="toolbar">
           <Button onClick={() => setSeen(!detail.seen)} disabled={busy !== null}>
             {detail.seen ? t('viewer.markUnread') : t('viewer.markRead')}
+          </Button>
+          <Button onClick={() => setReplyMode('one')} disabled={busy !== null} data-testid="btn-reply">
+            {t('reply.reply')}
+          </Button>
+          <Button onClick={() => setReplyMode('all')} disabled={busy !== null} data-testid="btn-reply-all">
+            {t('reply.replyAll')}
           </Button>
           <Button onClick={forward} disabled={busy !== null} data-testid="btn-forward">
             {t('viewer.forward')}
@@ -253,6 +261,9 @@ export default function MessageViewer(props: Props): React.JSX.Element {
         <pre className="mail-text" data-testid="mail-text">
           {detail.textBody ?? ''}
         </pre>
+      )}
+      {replyMode && (
+        <Reply message={detail} replyAll={replyMode === 'all'} onClose={() => setReplyMode(null)} />
       )}
       {showForward && (
         <Forward

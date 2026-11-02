@@ -593,6 +593,23 @@ export const ja = {
     copied: 'コピーしました',
     openLink: 'リンクを開く',
   },
+  reply: {
+    reply: '返信',
+    replyAll: '全員に返信',
+    title: '返信',
+    titleAll: '全員に返信',
+    quote: '元のメールを引用する',
+    quoteHeader: '{{date}} {{from}} のメッセージ:',
+  },
+  templates: {
+    title: 'テンプレート（定型文）',
+    hint: '返信・新規送信で選べる定型文です。件名・本文で次の差し込みが使えます:',
+    use: 'テンプレート',
+    choose: 'テンプレートを選ぶ…',
+    new: 'テンプレートを追加',
+    edit: '編集',
+    name: 'テンプレート名',
+  },
   autoSync: {
     on: '自動同期: ON',
     off: '自動同期: OFF',

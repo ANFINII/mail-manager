@@ -129,6 +129,15 @@ export interface ForwardRulesTable {
   apply_existing: Generated<number>;
 }
 
+export interface MailTemplatesTable {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RuleHitsTable {
   rule_id: string;
   message_id: string;
@@ -193,6 +202,7 @@ export interface Database {
   forward_targets: ForwardTargetsTable;
   forward_rules: ForwardRulesTable;
   rule_hits: RuleHitsTable;
+  mail_templates: MailTemplatesTable;
   messages_fts: MessagesFtsTable;
 }
 

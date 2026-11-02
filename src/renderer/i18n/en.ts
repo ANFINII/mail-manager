@@ -597,6 +597,23 @@ export const en: Translation = {
     copied: 'Copied',
     openLink: 'Open link',
   },
+  reply: {
+    reply: 'Reply',
+    replyAll: 'Reply all',
+    title: 'Reply',
+    titleAll: 'Reply all',
+    quote: 'Quote the original message',
+    quoteHeader: 'On {{date}}, {{from}} wrote:',
+  },
+  templates: {
+    title: 'Templates',
+    hint: 'Canned text you can pick when replying or composing. Subject and body can use:',
+    use: 'Template',
+    choose: 'Choose a template…',
+    new: 'Add template',
+    edit: 'Edit',
+    name: 'Template name',
+  },
   autoSync: {
     on: 'Auto sync: ON',
     off: 'Auto sync: OFF',

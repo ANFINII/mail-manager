@@ -3,8 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from 'stores/app-store'
 import type { AccountSummary } from '@shared/types'
 import { api, errorMessage } from 'lib/api'
+import { formatDateTime } from 'utils/format'
 import Button from 'components/parts/Button'
 import Modal from 'components/parts/Modal'
+import TemplatePicker from 'components/widgets/TemplatePicker'
 
 interface Props {
   accounts: AccountSummary[]
@@ -56,6 +58,17 @@ export default function Compose(props: Props): React.JSX.Element {
         {t('compose.to')}
         <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="dest@example.com" data-testid="compose-to" autoFocus />
       </label>
+      <TemplatePicker
+        vars={{
+          account: accounts.find((a) => a.id === accountId)?.email ?? '',
+          to: to.trim(),
+          date: formatDateTime(new Date().toISOString()),
+        }}
+        onPick={(s, b) => {
+          if (s) setSubject(s)
+          setBody(b)
+        }}
+      />
       <label className="field-block">
         {t('compose.subject')}
         <input value={subject} onChange={(e) => setSubject(e.target.value)} data-testid="compose-subject" />

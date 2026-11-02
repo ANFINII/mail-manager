@@ -529,6 +529,24 @@ migrations['0018_message_codes'] = {
   },
 }
 
+migrations['0019_mail_templates'] = {
+  async up(db: Kysely<unknown>) {
+    // 返信・新規送信で使う定型文。本文と件名に {{from_name}} などの差し込みが使える
+    await db.schema
+      .createTable('mail_templates')
+      .addColumn('id', 'text', (c) => c.primaryKey())
+      .addColumn('name', 'text', (c) => c.notNull())
+      .addColumn('subject', 'text', (c) => c.notNull().defaultTo(''))
+      .addColumn('body', 'text', (c) => c.notNull().defaultTo(''))
+      .addColumn('created_at', 'text', (c) => c.notNull())
+      .addColumn('updated_at', 'text', (c) => c.notNull())
+      .execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.dropTable('mail_templates').execute()
+  },
+}
+
 const provider: MigrationProvider = {
   async getMigrations() {
     return migrations

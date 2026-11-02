@@ -17,6 +17,7 @@ import { ForwardTargetRepository } from './db/forward-target-repository'
 import { MailboxRepository } from './db/mailbox-repository'
 import { MessageRepository } from './db/message-repository'
 import { SettingsRepository } from './db/settings-repository'
+import { TemplateRepository } from './db/template-repository'
 import { Batcher, EventBus, type EventListener } from './events/event-bus'
 import { WebhookNotifier } from './events/webhook'
 import { ExportService } from './export/export-service'
@@ -86,6 +87,7 @@ export class BackendApp {
     readonly storage: StorageService,
     readonly oauthLogin: OAuthLoginService,
     readonly codes: CodeService,
+    readonly templates: TemplateRepository,
     private readonly idleSyncBatch: Batcher<string>,
     private readonly scheduler: AutoSyncScheduler,
     private readonly appInfo: AppInfo,
@@ -371,6 +373,7 @@ export class BackendApp {
       storage,
       oauthLogin,
       codes,
+      new TemplateRepository(db),
       idleSyncBatch,
       scheduler,
       info,
@@ -562,6 +565,10 @@ export class BackendApp {
     'sent.duplicateCopies': (p) => this.messages.duplicateSentCopies(p.accountIds),
     'sent.deleteDuplicateCopies': (p) => this.messages.deleteDuplicateSentCopies(p.accountIds),
     'messages.send': (p) => this.messages.send(p.accountId, p.to, p.subject, p.text),
+    'messages.reply': (p) => this.messages.reply(p),
+    'templates.list': () => this.templates.list(),
+    'templates.save': (p) => this.templates.save(p, new Date().toISOString()),
+    'templates.remove': (p) => this.templates.remove(p.id),
     'messages.forward': (p) => this.messages.forward(p.ids, p.to),
     'messages.forwardAll': (p) => this.messages.forwardAll(p.query, p.to),
     'forwards.list': async (p) => {

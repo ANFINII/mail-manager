@@ -54,7 +54,10 @@ export class GraphSender {
         body: message.html
           ? { contentType: 'HTML', content: message.html }
           : { contentType: 'Text', content: message.text ?? '' },
-        toRecipients: [{ emailAddress: { address: message.to } }],
+        toRecipients: splitAddresses(message.to).map((address) => ({ emailAddress: { address } })),
+        ...(message.cc
+          ? { ccRecipients: splitAddresses(message.cc).map((address) => ({ emailAddress: { address } })) }
+          : {}),
         ...(message.attachments && message.attachments.length > 0
           ? {
               attachments: message.attachments.map((a) => ({
@@ -115,4 +118,11 @@ export class GraphSender {
           : 'unknown'
     throw new MailError(`Graph send error ${res.status} ${code}: ${scrubbed}`, kind)
   }
+}
+
+function splitAddresses(list: string): string[] {
+  return list
+    .split(',')
+    .map((a) => a.trim())
+    .filter(Boolean)
 }

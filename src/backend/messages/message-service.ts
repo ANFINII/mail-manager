@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { simpleParser } from 'mailparser'
 import MailComposer from 'nodemailer/lib/mail-composer'
+import { quoteBody, replySubject } from '@shared/template'
 import type {
   AddressInfo,
   AttachmentInfo,
@@ -101,6 +102,7 @@ interface MailOp {
   kind: 'flags' | 'delete' | 'move';
   seen?: boolean;
   flagged?: boolean;
+  answered?: boolean;
   /** move の移動先フォルダ（パス） */
   destination?: string;
 }
@@ -312,18 +314,85 @@ export class MessageService {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(dest)) throw new Error('宛先メールアドレスが不正です')
     const account = await this.deps.accountRepo.getById(accountId)
     if (!account) throw new Error('アカウントが見つかりません')
+    return this.deliver(account, { to: dest, subject, text })
+  }
+
+  /**
+   * 受信メールに返信する。送信元はそのメールを受信したアカウント。
+   * In-Reply-To / References を付けてスレッドをつなぎ、成功したら元メールに \Answered を付ける。
+   * replyAll では元の To / Cc（自分を除く）を Cc に入れる。
+   */
+  async reply(params: {
+    id: string;
+    text: string;
+    replyAll?: boolean;
+    quote?: boolean;
+    quoteHeader?: string;
+  }): Promise<import('@shared/types').SendResult> {
+    const original = await this.deps.messageRepo.getById(params.id)
+    if (!original) throw new Error('メールが見つかりません')
+    const account = await this.deps.accountRepo.getById(original.account_id)
+    if (!account) throw new Error('アカウントが見つかりません')
+    const self = account.email.toLowerCase()
+    const toList = parseAddresses(original.to_addresses)
+    const ccList = parseAddresses(original.cc_addresses)
+    const fromSelf = (original.from_address ?? '').toLowerCase() === self
+    // 自分が送ったメール（送信済み）への返信は、元の宛先へ送る
+    const primary = fromSelf
+      ? toList.map((a) => a.address)
+      : original.from_address
+        ? [original.from_address]
+        : []
+    if (primary.length === 0) throw new Error('返信先のアドレスがありません')
+    const seen = new Set([self, ...primary.map((a) => a.toLowerCase())])
+    const cc: string[] = []
+    if (params.replyAll)
+      for (const a of [...toList, ...ccList]) {
+        const key = a.address.toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        cc.push(a.address)
+      }
+    let text = params.text
+    if (params.quote) {
+      const body = original.text_body ?? (original.html_body ? stripHtml(original.html_body) : '')
+      const header =
+        params.quoteHeader ??
+        `On ${original.date ?? ''}, ${original.from_name ? `${original.from_name} <${original.from_address}>` : (original.from_address ?? '')} wrote:`
+      text += quoteBody(body.trim(), header)
+    }
+    const mid = original.message_id?.trim() || null
+    const result = await this.deliver(account, {
+      to: primary.join(', '),
+      cc: cc.join(', ') || undefined,
+      subject: replySubject(original.subject),
+      text,
+      inReplyTo: mid,
+      references: mid ? [mid] : undefined,
+    })
+    // 返信済みの印（失敗しても送信は成功しているので無視する）
+    void this.runOperation([original.id], { kind: 'flags', answered: true }).catch(() => undefined)
+    return result
+  }
+
+  /** 送信して、Graph 以外は送信控えを Sent フォルダへ保存する */
+  private async deliver(
+    account: AccountRow,
+    message: import('../mail/smtp-sender').OutgoingMessage,
+  ): Promise<import('@shared/types').SendResult> {
+    const accountId = account.id
     this.clearSendBlocks(accountId)
     const viaGraph = this.deps.graph.canSend(account)
     let messageId: string
     try {
-      messageId = await this.submit(account, { to: dest, subject, text })
+      messageId = await this.submit(account, message)
     } catch (err) {
       const reason = this.deps.logger.scrubber.scrub(
         err instanceof Error ? err.message : String(err),
       )
       this.log.error(`Failed to send message from ${account.email}`, {
         accountId,
-        to: dest,
+        to: message.to,
         error: reason,
       })
       throw err
@@ -334,7 +403,16 @@ export class MessageService {
     if (!viaGraph)
       try {
         const raw: Buffer = await new Promise((resolve, reject) => {
-          new MailComposer({ from: account.email, to: dest, subject, text, messageId })
+          new MailComposer({
+            from: account.email,
+            to: message.to,
+            cc: message.cc,
+            subject: message.subject,
+            text: message.text,
+            messageId,
+            inReplyTo: message.inReplyTo ?? undefined,
+            references: message.references,
+          })
             .compile()
             .build((err, msg) => (err ? reject(err) : resolve(msg)))
         })
@@ -359,7 +437,13 @@ export class MessageService {
           error: this.deps.logger.scrubber.scrub(err instanceof Error ? err.message : String(err)),
         })
       }
-    this.log.info(`Sent message from ${account.email}`, { accountId, to: dest, savedToSent })
+    this.log.info(`Sent message from ${account.email}`, {
+      accountId,
+      to: message.to,
+      cc: message.cc,
+      reply: !!message.inReplyTo,
+      savedToSent,
+    })
     if (savedToSent) this.deps.onSent?.(accountId)
     return { messageId, savedToSent }
   }
@@ -729,9 +813,10 @@ export class MessageService {
           if (op.seen === false) await session.removeFlags(uids, ['\\Seen'])
           if (op.flagged === true) await session.addFlags(uids, ['\\Flagged'])
           if (op.flagged === false) await session.removeFlags(uids, ['\\Flagged'])
+          if (op.answered === true) await session.addFlags(uids, ['\\Answered'])
           await this.deps.messageRepo.updateFlags(
             list.map((m) => m.id),
-            { seen: op.seen, flagged: op.flagged },
+            { seen: op.seen, flagged: op.flagged, answered: op.answered },
             this.now(),
           )
           this.deps.events.emit({ type: 'messages.changed', ids: list.map((m) => m.id) })

@@ -6,6 +6,7 @@ import type { ForwardTarget } from '@shared/types'
 import type { Settings } from '@shared/types'
 import { api, errorMessage } from 'lib/api'
 import StoragePanel from 'components/widgets/StoragePanel'
+import TemplateManager from 'components/widgets/TemplateManager'
 
 export default function SettingsTemplate() {
   const { t } = useTranslation()
@@ -383,6 +384,8 @@ export default function SettingsTemplate() {
           </table>
         )}
       </section>
+
+      <TemplateManager />
 
       <StoragePanel />
 

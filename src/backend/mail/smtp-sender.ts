@@ -20,11 +20,16 @@ export interface SmtpSenderDeps {
 }
 
 export interface OutgoingMessage {
+  /** 宛先（複数はカンマ区切り） */
   to: string;
+  /** Cc（複数はカンマ区切り） */
+  cc?: string;
   subject: string;
   text?: string;
   html?: string;
   inReplyTo?: string | null;
+  /** スレッドをつなぐ References ヘッダー */
+  references?: string[];
   attachments?: Array<{ filename: string; content: Buffer; contentType?: string }>;
 }
 
@@ -119,10 +124,12 @@ export class SmtpSender {
       const info = await entry.transporter.sendMail({
         from: account.email,
         to: message.to,
+        cc: message.cc || undefined,
         subject: message.subject,
         text: message.text,
         html: message.html,
         inReplyTo: message.inReplyTo ?? undefined,
+        references: message.references?.length ? message.references : undefined,
         attachments: message.attachments,
       })
       entry.lastUsed = Date.now()

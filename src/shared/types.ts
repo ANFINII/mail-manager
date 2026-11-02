@@ -640,3 +640,20 @@ export interface ReceivedCode {
   link: string | null;
   seen: boolean;
 }
+
+/** 返信・新規送信の定型文。件名・本文に {{from_name}} などの差し込みが使える */
+export interface MailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  updatedAt: string;
+}
+
+export interface MailTemplateInput {
+  /** 指定すると更新、省略すると新規作成 */
+  id?: string;
+  name: string;
+  subject?: string;
+  body?: string;
+}
