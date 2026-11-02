@@ -54,6 +54,10 @@ export interface AccountSummary {
   groupId: string | null;
   /** 認証テスト・同期が最終的に失敗した連続回数（成功で 0 に戻る） */
   consecutiveFailures: number;
+  /** タグ（複数可、名前順） */
+  tags: string[];
+  /** 自由記述のメモ */
+  note: string | null;
   createdAt: string;
   updatedAt: string;
 }

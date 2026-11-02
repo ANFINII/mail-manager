@@ -584,6 +584,21 @@ migrations['0020_mail_op_history'] = {
   },
 }
 
+migrations['0021_account_tags_notes'] = {
+  async up(db: Kysely<unknown>) {
+    // 複数タグ（JSON 配列の文字列）と自由記述のメモ。グループ（1 つだけ）とは別に整理に使う
+    await db.schema
+      .alterTable('accounts')
+      .addColumn('tags', 'text', (c) => c.notNull().defaultTo('[]'))
+      .execute()
+    await db.schema.alterTable('accounts').addColumn('note', 'text').execute()
+  },
+  async down(db: Kysely<unknown>) {
+    await db.schema.alterTable('accounts').dropColumn('note').execute()
+    await db.schema.alterTable('accounts').dropColumn('tags').execute()
+  },
+}
+
 const provider: MigrationProvider = {
   async getMigrations() {
     return migrations

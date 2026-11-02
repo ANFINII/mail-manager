@@ -10,6 +10,7 @@ import AuthBadge from 'components/parts/AuthBadge'
 import StatusBadge from 'components/parts/StatusBadge'
 import GroupAssign from 'components/widgets/GroupAssign'
 import GroupManager from 'components/widgets/GroupManager'
+import TagAssign from 'components/widgets/TagAssign'
 
 const FILTERS: AccountFilter[] = [
   'all',
@@ -66,13 +67,21 @@ export default function AccountsTemplate() {
   const filter: AccountFilter = filterParam && FILTERS.includes(filterParam) ? filterParam : 'all'
   // グループ絞り込み: '' = すべて / 'none' = 未所属 / それ以外はグループ ID
   const groupFilter = params.get('group') ?? ''
-  const setUrlParams = (next: { filter?: string; group?: string }) => {
-    const merged = { filter: next.filter ?? filter, group: next.group ?? groupFilter }
+  const tagFilter = params.get('tag') ?? ''
+  const setUrlParams = (next: { filter?: string; group?: string; tag?: string }) => {
+    const merged = {
+      filter: next.filter ?? filter,
+      group: next.group ?? groupFilter,
+      tag: next.tag ?? tagFilter,
+    }
     const out: Record<string, string> = {}
     if (merged.filter && merged.filter !== 'all') out.filter = merged.filter
     if (merged.group) out.group = merged.group
+    if (merged.tag) out.tag = merged.tag
     setParams(out)
   }
+  const allTags = useMemo(() => [...new Set(accounts.flatMap((a) => a.tags))].sort(), [accounts])
+  const [tagDialog, setTagDialog] = useState(false)
   const groupName = useMemo(() => new Map(groups.map((g) => [g.id, g.name])), [groups])
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -84,10 +93,17 @@ export default function AccountsTemplate() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return accounts.filter(
-      (a) => matchesFilter(a, filter) && matchesGroup(a) && (!q || a.email.toLowerCase().includes(q)),
+      (a) =>
+        matchesFilter(a, filter) &&
+        matchesGroup(a) &&
+        (!tagFilter || a.tags.includes(tagFilter)) &&
+        (!q ||
+          a.email.toLowerCase().includes(q) ||
+          (a.note ?? '').toLowerCase().includes(q) ||
+          a.tags.some((tg) => tg.toLowerCase().includes(q))),
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accounts, filter, groupFilter, search])
+  }, [accounts, filter, groupFilter, tagFilter, search])
 
   // ソート（エラー本文などの自由文は対象外）。未指定なら元の並び順のまま。
   type AccountSortCol =
@@ -281,6 +297,19 @@ export default function AccountsTemplate() {
             ))}
           </select>
         </label>
+        {allTags.length > 0 && (
+          <label className="field-inline">
+            {t('tags.title')}
+            <select value={tagFilter} onChange={(e) => setUrlParams({ tag: e.target.value })} data-testid="tag-filter">
+              <option value="">{t('tags.all')}</option>
+              {allTags.map((tg) => (
+                <option key={tg} value={tg}>
+                  {tg}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button className="btn" onClick={() => setGroupDialog('manage')} data-testid="btn-manage-groups">
           {t('accounts.manageGroups')}
         </button>
@@ -308,6 +337,14 @@ export default function AccountsTemplate() {
           data-testid="btn-assign-group"
         >
           {t('accounts.assignGroup')}
+        </button>
+        <button
+          className="btn"
+          onClick={() => setTagDialog(true)}
+          disabled={selected.size === 0}
+          data-testid="btn-assign-tags"
+        >
+          {t('tags.assign')}
         </button>
         <button
           className="btn"
@@ -443,6 +480,16 @@ export default function AccountsTemplate() {
                       >
                         {a.email}
                       </a>
+                      {a.tags.map((tg) => (
+                        <span key={tg} className="tag-chip small">
+                          {tg}
+                        </span>
+                      ))}
+                      {a.note && (
+                        <span className="note-mark" title={a.note}>
+                          ✎
+                        </span>
+                      )}
                     </div>
                     <div>{a.provider}</div>
                     <div className="cell-group" data-testid="cell-group" title={a.groupId ? groupName.get(a.groupId) ?? '' : ''}>
@@ -477,6 +524,7 @@ export default function AccountsTemplate() {
         />
       )}
       {groupDialog === 'manage' && <GroupManager onClose={() => setGroupDialog(null)} />}
+      {tagDialog && <TagAssign ids={[...selected]} onClose={() => setTagDialog(false)} />}
     </div>
   )
 }

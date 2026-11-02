@@ -23,6 +23,25 @@ import {
   type Credentials,
 } from '../security/credentials'
 
+/** タグの正規化: 前後の空白を除き、空・重複（大文字小文字を区別しない）を除いて名前順に並べる。1 つ 40 文字まで */
+export function normalizeTags(tags: string[]): string[] {
+  const out = new Map<string, string>()
+  for (const raw of tags) {
+    const tag = raw.trim().replace(/\s+/g, ' ').slice(0, 40)
+    if (tag && !out.has(tag.toLowerCase())) out.set(tag.toLowerCase(), tag)
+  }
+  return [...out.values()].sort((a, b) => a.localeCompare(b))
+}
+
+export function parseTags(json: string | null | undefined): string[] {
+  try {
+    const v = JSON.parse(json ?? '[]') as unknown
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
 export function toSummary(row: AccountRow): AccountSummary {
   return {
     id: row.id,
@@ -47,6 +66,8 @@ export function toSummary(row: AccountRow): AccountSummary {
     messageCount: row.message_count,
     groupId: row.group_id ?? null,
     consecutiveFailures: Number(row.consecutive_failures ?? 0),
+    tags: parseTags(row.tags),
+    note: row.note ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -132,6 +153,40 @@ export class AccountService {
     const detail = await this.get(id)
     if (!detail) throw new Error('アカウントが見つかりません')
     return detail
+  }
+
+  /** タグを追加・削除する（複数アカウントまとめて） */
+  async updateTags(ids: string[], add: string[] = [], remove: string[] = []): Promise<number> {
+    const rows = await this.deps.repo.getByIds([...new Set(ids)])
+    const removeKeys = new Set(remove.map((r) => r.trim().toLowerCase()))
+    const now = (this.deps.now ?? (() => new Date().toISOString()))()
+    const changed: AccountRow[] = []
+    for (const row of rows) {
+      const current = parseTags(row.tags)
+      const next = normalizeTags([...current.filter((t) => !removeKeys.has(t.toLowerCase())), ...add])
+      if (JSON.stringify(next) === JSON.stringify(current)) continue
+      await this.deps.repo.setTagsAndNote(row.id, { tags: JSON.stringify(next) }, now)
+      changed.push({ ...row, tags: JSON.stringify(next) })
+    }
+    if (changed.length) this.deps.events.emit({ type: 'accounts.updated', accounts: changed.map(toSummary) })
+    return changed.length
+  }
+
+  async setNote(id: string, note: string): Promise<AccountSummary> {
+    const row = await this.deps.repo.getById(id)
+    if (!row) throw new Error('アカウントが見つかりません')
+    const value = note.trim() ? note.slice(0, 4000) : null
+    await this.deps.repo.setTagsAndNote(id, { note: value }, (this.deps.now ?? (() => new Date().toISOString()))())
+    const summary = toSummary({ ...row, note: value })
+    this.deps.events.emit({ type: 'accounts.updated', accounts: [summary] })
+    return summary
+  }
+
+  /** 使われているタグと件数（名前順） */
+  async tagCounts(): Promise<Array<{ tag: string; count: number }>> {
+    const counts = new Map<string, number>()
+    for (const row of await this.deps.repo.list({})) for (const t of parseTags(row.tags)) counts.set(t, (counts.get(t) ?? 0) + 1)
+    return [...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => a.tag.localeCompare(b.tag))
   }
 
   async list(query: AccountListQuery): Promise<AccountSummary[]> {

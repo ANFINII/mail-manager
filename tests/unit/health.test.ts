@@ -31,6 +31,8 @@ function account(patch: Partial<AccountRow> = {}): AccountRow {
     updated_at: '2026-01-01T00:00:00Z',
     group_id: null,
     consecutive_failures: 0,
+    tags: '[]',
+    note: null,
     ...patch,
   };
 }

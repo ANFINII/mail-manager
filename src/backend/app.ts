@@ -550,6 +550,9 @@ export class BackendApp {
       return detail
     },
     'accounts.setGroup': async (p) => ({ updated: await this.groups.assign(p.ids, p.groupId) }),
+    'accounts.updateTags': async (p) => ({ updated: await this.accounts.updateTags(p.ids, p.add, p.remove) }),
+    'accounts.setNote': (p) => this.accounts.setNote(p.id, p.note),
+    'accounts.tags': () => this.accounts.tagCounts(),
     'groups.list': async () => this.groups.list(),
     'groups.create': (p) => this.groups.create(p.name),
     'groups.rename': (p) => this.groups.rename(p.id, p.name),

@@ -9,6 +9,7 @@ import AuthBadge from 'components/parts/AuthBadge'
 import StatusBadge from 'components/parts/StatusBadge'
 import CredentialsEditor from 'components/widgets/CredentialsEditor'
 import OAuthLogin from 'components/widgets/OAuthLogin'
+import TagsNoteEditor from 'components/widgets/TagsNoteEditor'
 
 export default function AccountDetailTemplate() {
   const { t, i18n } = useTranslation()
@@ -225,6 +226,7 @@ export default function AccountDetailTemplate() {
           }}
         />
       )}
+      <TagsNoteEditor account={a} />
       <h2>{t('detail.mailboxes')}</h2>
       {mailboxes.length === 0 ? (
         <p className="muted">{t('detail.noMailboxes')}</p>

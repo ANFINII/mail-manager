@@ -75,6 +75,13 @@ export interface RpcMethods {
     params: { ids: string[]; groupId: string | null };
     result: { updated: number };
   };
+  /** タグの追加・削除（複数アカウントまとめて）。変更した件数を返す */
+  'accounts.updateTags': {
+    params: { ids: string[]; add?: string[]; remove?: string[] };
+    result: { updated: number };
+  };
+  'accounts.setNote': { params: { id: string; note: string }; result: AccountSummary };
+  'accounts.tags': { params: Record<string, never>; result: Array<{ tag: string; count: number }> };
   'groups.list': { params: Record<string, never>; result: AccountGroupInfo[] };
   'groups.create': { params: { name: string }; result: AccountGroupInfo[] };
   'groups.rename': { params: { id: string; name: string }; result: AccountGroupInfo[] };

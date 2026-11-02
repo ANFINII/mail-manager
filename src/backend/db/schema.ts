@@ -31,6 +31,10 @@ export interface AccountsTable {
   group_id: string | null;
   /** 認証テスト・同期が最終的に失敗した連続回数（成功で 0 に戻る）。健全性モニタで使う */
   consecutive_failures: Generated<number>;
+  /** タグ（JSON 配列の文字列、正規化済み・重複なし・名前順） */
+  tags: Generated<string>;
+  /** 自由記述のメモ */
+  note: string | null;
 }
 
 /** アカウントのグループ（一括操作・絞り込みの単位）。名前は一意。 */

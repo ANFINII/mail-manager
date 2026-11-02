@@ -197,6 +197,15 @@ export class AccountRepository {
       .execute()
   }
 
+  /** タグとメモを更新する（tags は正規化済みの JSON 文字列） */
+  async setTagsAndNote(id: string, patch: { tags?: string; note?: string | null }, now: string): Promise<void> {
+    await this.db
+      .updateTable('accounts')
+      .set({ ...patch, updated_at: now })
+      .where('id', '=', id)
+      .execute()
+  }
+
   async countAll(): Promise<number> {
     const r = await this.db
       .selectFrom('accounts')

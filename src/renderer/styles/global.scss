@@ -845,3 +845,51 @@ code {
   max-height: 360px;
   overflow: auto;
 }
+
+/* タグ・メモ */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #eef2f7;
+  color: #344054;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.tag-chip.small {
+  font-size: 10px;
+  line-height: 16px;
+}
+.tag-x {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0 0 0 2px;
+}
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.tag-new {
+  border: 1px dashed var(--border);
+  border-radius: 9px;
+  padding: 0 8px;
+  font-size: 11px;
+  height: 20px;
+}
+.note-mark {
+  margin-left: 4px;
+  color: var(--muted);
+  cursor: help;
+}
+.tags-note {
+  margin: 12px 0;
+}
